@@ -4,7 +4,6 @@ import { describe, it } from 'node:test';
 import {
   autoOpenStart,
   expiresFor,
-  localDay,
   hoursLeft,
   mediaTypeOf,
   orderForViewer,
@@ -67,19 +66,14 @@ describe('historias', () => {
 
 describe('historias al abrir la app', () => {
   const list = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
-  it('abre en la primera nueva, cada vez mientras haya nuevas', () => {
-    assert.equal(autoOpenStart(list, new Set(['a']), '2026-10-25', '2026-10-25'), 'b');
-    assert.equal(autoOpenStart(list, new Set(), null, '2026-10-25'), 'a');
+  it('empieza por la primera nueva', () => {
+    assert.equal(autoOpenStart(list, new Set(['a'])), 'b');
+    assert.equal(autoOpenStart(list, new Set()), 'a');
   });
-  it('si ya vio todas, solo la primera vez del día', () => {
-    const all = new Set(['a', 'b', 'c']);
-    assert.equal(autoOpenStart(list, all, '2026-10-24', '2026-10-25'), 'a');
-    assert.equal(autoOpenStart(list, all, '2026-10-25', '2026-10-25'), null);
+  it('si ya vio todas, igual abre desde el principio', () => {
+    assert.equal(autoOpenStart(list, new Set(['a', 'b', 'c'])), 'a');
   });
   it('sin historias no abre', () => {
-    assert.equal(autoOpenStart([], new Set(), null, '2026-10-25'), null);
-  });
-  it('día local', () => {
-    assert.equal(localDay(new Date(2026, 0, 5, 23, 59)), '2026-01-05');
+    assert.equal(autoOpenStart([], new Set()), null);
   });
 });

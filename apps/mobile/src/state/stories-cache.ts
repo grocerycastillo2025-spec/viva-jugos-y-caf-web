@@ -4,10 +4,8 @@
  * volver a pedirla, y las fotos ya vienen precargadas.
  */
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
 import { fetchStories, type StoryRow } from '../api/stories';
-import { autoOpenStart, localDay } from '../domain/stories';
+import { autoOpenStart } from '../domain/stories';
 import { loadSeenStories } from './seen-stories';
 import { preloadImages } from './preload';
 
@@ -35,22 +33,11 @@ export function preloadStory(story: StoryRow | undefined): void {
 // Abrir solas al cargar la app
 // ---------------------------------------------------------------------
 
-const AUTO_KEY = 'viva.stories.autoOpenDay.v1';
 let autoOpenedThisSession = false;
 
-/**
- * Id de la historia con la que abrir el visor solo, o null. Una vez por
- * visita a la app; ver `autoOpenStart` para la regla.
- */
-export async function takeAutoOpen(stories: readonly StoryRow[], now = new Date()): Promise<string | null> {
+/** Id de la historia con la que abrir el visor solo, o null. Una vez por visita. */
+export async function takeAutoOpen(stories: readonly StoryRow[]): Promise<string | null> {
   if (autoOpenedThisSession) return null;
   autoOpenedThisSession = true;
-  const [seen, lastDay] = await Promise.all([
-    loadSeenStories(),
-    AsyncStorage.getItem(AUTO_KEY).catch(() => null),
-  ]);
-  const today = localDay(now);
-  const start = autoOpenStart(stories, seen, lastDay, today);
-  if (start !== null) void AsyncStorage.setItem(AUTO_KEY, today).catch(() => undefined);
-  return start;
+  return autoOpenStart(stories, await loadSeenStories());
 }

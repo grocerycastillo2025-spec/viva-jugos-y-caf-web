@@ -74,29 +74,20 @@ export function trimSeen(ids: readonly string[], max = 200): string[] {
   return ids.length <= max ? [...ids] : ids.slice(ids.length - max);
 }
 
-/** Día local "AAAA-MM-DD" (para "una vez al día"). */
-export function localDay(date: Date): string {
-  const pad = (n: number): string => String(n).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-}
 
 /**
  * Con qué historia abrir el visor solo al cargar la app, o null.
  *
- * - Si hay historias que este teléfono no ha visto: se abre en la primera
- *   nueva (cada vez que se abre la app mientras queden nuevas).
- * - Si ya vio todas: se abre desde el principio solo la primera vez del
- *   día, para no cansar a quien entra varias veces.
+ * Cada vez que se abre la app (una vez por visita): si hay historias que
+ * este teléfono no ha visto, empieza por la primera nueva; si ya vio
+ * todas, empieza desde el principio. Así el dueño siempre tiene ese
+ * espacio para sus promos.
  */
 export function autoOpenStart(
   stories: readonly { readonly id: string }[],
   seen: ReadonlySet<string>,
-  lastAutoOpenDay: string | null,
-  today: string,
 ): string | null {
   if (stories.length === 0) return null;
   const firstNew = stories.find((s) => !seen.has(s.id));
-  if (firstNew !== undefined) return firstNew.id;
-  if (lastAutoOpenDay === today) return null;
-  return stories[0]?.id ?? null;
+  return firstNew?.id ?? stories[0]?.id ?? null;
 }

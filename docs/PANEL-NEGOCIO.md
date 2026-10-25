@@ -71,9 +71,9 @@ teléfono, como una pantalla más).
   pantalla de inicio, como en Instagram. Duran 24 h, 3 días, 7 días o quedan
   *destacadas* (no caducan). Se pueden ligar a un producto: el cliente ve
   el botón *Pedir*. Migración `0022_historias.sql`.
-  Al abrir la app el visor sale solo: cada vez mientras haya historias que
-  ese teléfono no ha visto (empieza por la nueva) y, si ya vio todas, una
-  vez al día. Las fotos se precargan y una historia no avanza hasta que su
+  Al abrir la app el visor sale solo, cada vez (una vez por visita):
+  empieza por las que ese teléfono no ha visto y, si ya vio todas, desde
+  el principio. Las fotos se precargan y una historia no avanza hasta que su
   foto terminó de cargar.
 - **Estadísticas**: ventas, pedidos, ticket promedio, clientes, ventas por
   día, lo más vendido, lo más consultado y las historias más vistas (7, 30 o
