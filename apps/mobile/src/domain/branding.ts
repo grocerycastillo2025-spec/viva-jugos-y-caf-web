@@ -182,7 +182,7 @@ export function buildColors(
 }
 
 export const defaultBranding: Branding = {
-  displayName: 'Viva Juice and Coffee',
+  displayName: 'VIVA Jugos y Café',
   logoUrl: null,
   colors: buildColors(FALLBACK.primary, FALLBACK.secondary, FALLBACK.accent),
   features: defaultFeatures,

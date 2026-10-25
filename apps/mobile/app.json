@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Viva Juice",
+    "name": "VIVA Jugos y Café",
     "slug": "juicebar-mobile",
     "scheme": "vivajuice",
     "version": "0.1.0",
@@ -29,10 +29,10 @@
     "web": {
       "bundler": "metro",
       "output": "single",
-      "name": "Viva Juice and Coffee",
-      "shortName": "Viva",
-      "lang": "en",
-      "description": "Order fresh juices, smoothies and coffee from Viva Juice and Coffee.",
+      "name": "VIVA Jugos y Café",
+      "shortName": "VIVA",
+      "lang": "es",
+      "description": "Pide jugos naturales, licuados, bowls y café en VIVA Jugos y Café.",
       "themeColor": "#0E4A2B",
       "backgroundColor": "#F5F0E6",
       "favicon": "./public/favicon.png"
@@ -77,7 +77,9 @@
       "restaurantId": "11111111-1111-4111-8111-111111111111",
       "eas": {
         "projectId": "4ed95bba-1725-4c3a-abf9-910f0fd1a351"
-      }
+      },
+      "currency": "MXN",
+      "locale": "es-MX"
     }
   }
 }

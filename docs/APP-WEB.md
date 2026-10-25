@@ -1,5 +1,8 @@
 # App web (PWA)
 
+> Para VIVA Jugos y Café (sin Clover, panel del dueño, pago en mostrador) ver
+> también [PANEL-NEGOCIO.md](PANEL-NEGOCIO.md).
+
 La misma app de `apps/mobile` exportada para navegador con
 `expo export --platform web`. Es el mismo código: lo que se cambia en la app
 llega también a la web en la siguiente publicación.
@@ -47,11 +50,16 @@ pnpm --filter @juicebar/mobile build:web    # exportación, en apps/mobile/dist
 
 | Pieza | En la web |
 |---|---|
-| Notificaciones push | No hay. `src/push/notifications.ts` devuelve `web` y el perfil explica que el pedido se sigue en la pestaña Pedidos. |
+| Notificaciones push | No hay. `src/push/notifications.ts` devuelve `web` y el perfil explica que el pedido se sigue en la pestaña Pedidos (que se actualiza sola mientras el pedido está en curso). |
 | Vibración al añadir | `expo-haptics` no hace nada en el navegador. |
 | Pantalla ancha | La app se pinta en una columna centrada de 520 px (`public/index.html` y `src/hooks/use-content-width.ts`, que deben coincidir). |
 | Instalación | `public/manifest.webmanifest` + `public/sw.js`: se puede "añadir a pantalla de inicio" en Android y en iPhone. |
 | Rutas directas | `scripts/web-postbuild.mjs` copia `index.html` a `404.html`, así abrir o recargar `/order/<id>` funciona en Pages. |
+
+Ojo al probar en local: Metro guarda en caché las variables `EXPO_PUBLIC_*`
+ya sustituidas. Si cambias la URL de Supabase entre dos exportaciones, usa
+`npx expo export --platform web --clear`. En CI no pasa (cada run empieza de
+cero).
 
 El service worker solo guarda en caché los archivos de la propia app (con
 hash en el nombre). El menú, los precios y los pedidos se leen siempre en

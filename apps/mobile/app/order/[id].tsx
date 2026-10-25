@@ -22,7 +22,7 @@ import { DataState } from '../../src/components/DataState';
 import { Screen } from '../../src/components/Screen';
 import { Button } from '../../src/components/ui';
 import type { BrandColors } from '../../src/domain/branding';
-import { formatMoney } from '../../src/domain/money';
+import { formatMoney, moneyDefaults } from '../../src/domain/money';
 import {
   displayAmountCents,
   hasAuthoritativeTotal,
@@ -33,6 +33,7 @@ import {
 } from '../../src/domain/order';
 import { formatSlotLabel, partsInZone } from '../../src/domain/pickup';
 import { useAsync } from '../../src/hooks/use-async';
+import { useInterval } from '../../src/hooks/use-interval';
 import { useColors } from '../../src/state/branding-context';
 import { useStores } from '../../src/state/store-context';
 import { strings } from '../../src/strings';
@@ -57,6 +58,15 @@ export default function OrderScreen(): ReactNode {
   }, [id]);
 
   const { data, error, loading, refreshing, refresh, reload } = useAsync(load, [id]);
+
+  // Mientras el pedido siga en curso, se revisa solo cada 20 s: el
+  // negocio lo mueve desde su panel y el cliente tiene que verlo.
+  const status = data?.order?.status;
+  useInterval(
+    refresh,
+    20_000,
+    status === 'confirmed' || status === 'preparing' || status === 'ready',
+  );
 
   if (loading || error !== null || data === null || data.order === null) {
     return (
@@ -105,7 +115,7 @@ export default function OrderScreen(): ReactNode {
       <View style={styles.headerRow}>
         <Text style={styles.number}>{strings.order.number(order.order_number)}</Text>
         <Text style={styles.placed}>
-          {strings.order.placedAt(new Date(order.created_at).toLocaleDateString())}
+          {strings.order.placedAt(new Date(order.created_at).toLocaleDateString(moneyDefaults().locale))}
         </Text>
       </View>
 
@@ -196,8 +206,13 @@ export default function OrderScreen(): ReactNode {
           <Text style={styles.totalValue}>{formatMoney(displayAmountCents(totals))}</Text>
         </View>
         {/* Mientras Clover no devuelva el total, no se inventa uno. */}
-        {!hasAuthoritativeTotal(totals) ? (
+        {!hasAuthoritativeTotal(totals) || order.payment_method === 'counter' ? (
           <Text style={styles.totalNote}>{strings.order.taxNote}</Text>
+        ) : null}
+        {order.payment_method === 'counter' &&
+        order.status !== 'completed' &&
+        order.status !== 'canceled' ? (
+          <Text style={styles.totalNote}>{strings.order.payAtCounter}</Text>
         ) : null}
       </View>
 

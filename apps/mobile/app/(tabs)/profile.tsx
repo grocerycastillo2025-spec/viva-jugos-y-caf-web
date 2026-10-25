@@ -11,6 +11,7 @@ import { useRouter } from 'expo-router';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 
 import { fetchProfile } from '../../src/api/account';
+import { fetchMembership, type Membership } from '../../src/api/admin';
 import { formatAddress } from '../../src/api/store';
 import type { ProfileRow } from '../../src/api/types';
 import { AuthForm } from '../../src/components/AuthForm';
@@ -46,10 +47,18 @@ export default function ProfileScreen(): ReactNode {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { selectedStore, hasChoice } = useStores();
 
-  const load = useCallback(
-    async (): Promise<ProfileRow | null> => (user === null ? null : fetchProfile(user.id)),
-    [user],
-  );
+  const load = useCallback(async (): Promise<{
+    profile: ProfileRow | null;
+    membership: Membership | null;
+  }> => {
+    if (user === null) return { profile: null, membership: null };
+    const [profile, membership] = await Promise.all([
+      fetchProfile(user.id),
+      // Si falla (base sin la 0020), el perfil se ve igual, sin el panel.
+      fetchMembership(user.id, readEnv().restaurantId).catch(() => null),
+    ]);
+    return { profile, membership };
+  }, [user]);
 
   const { data, error, loading, refreshing, refresh, reload } = useAsync(load, [user?.id]);
 
@@ -83,14 +92,24 @@ export default function ProfileScreen(): ReactNode {
         <AuthForm />
       ) : (
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>{personName(data, user.email)}</Text>
+          <Text style={styles.cardTitle}>{personName(data?.profile ?? null, user.email)}</Text>
           <Text style={styles.cardBody}>{user.email}</Text>
 
-          {data?.phone != null ? <Text style={styles.cardBody}>{data.phone}</Text> : null}
+          {data?.profile?.phone != null ? (
+            <Text style={styles.cardBody}>{data.profile.phone}</Text>
+          ) : null}
 
           <Button label={strings.auth.signOut} variant="outline" onPress={onSignOut} />
         </View>
       )}
+
+      {data?.membership != null ? (
+        <View style={styles.card}>
+          <Text style={styles.cardLabel}>{strings.profile.adminTitle}</Text>
+          <Text style={styles.cardBody}>{strings.profile.adminBody}</Text>
+          <Button label={strings.profile.adminOpen} onPress={() => router.push('/admin')} />
+        </View>
+      ) : null}
 
       {selectedStore !== null ? (
         <View style={styles.card}>

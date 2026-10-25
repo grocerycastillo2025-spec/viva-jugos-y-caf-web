@@ -25,7 +25,12 @@ import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { createPickupOrder, fetchSlotOccupancy, parseCreateOrderError } from '../src/api/orders';
+import {
+  createPickupOrder,
+  fetchSlotOccupancy,
+  parseCreateOrderError,
+  placeCounterOrder,
+} from '../src/api/orders';
 import { fetchPickupSetup } from '../src/api/store';
 import { AuthForm } from '../src/components/AuthForm';
 import { DataState } from '../src/components/DataState';
@@ -172,8 +177,13 @@ export default function CheckoutScreen(): ReactNode {
     setPlacing(true);
     setFailure(null);
 
+    // Sucursal sin cobro en linea (0020): el pedido se paga en el
+    // mostrador y nace confirmado, asi que va directo al seguimiento.
+    const payAtCounter = selectedStore?.payments_mode === 'counter';
+
     try {
-      const created = await createPickupOrder({
+      const create = payAtCounter ? placeCounterOrder : createPickupOrder;
+      const created = await create({
         storeId: selectedStoreId,
         idempotencyKey: idempotencyKey.current,
         pickupAt: effectiveSlot.startsAt,
@@ -189,6 +199,10 @@ export default function CheckoutScreen(): ReactNode {
       });
 
       clear();
+      if (payAtCounter) {
+        router.replace({ pathname: '/order/[id]', params: { id: created.order_id } });
+        return;
+      }
       // Al pago, no al seguimiento: el pedido nace en `payment_pending` y
       // hasta que haya cobro no hay nada que seguir.
       router.replace({ pathname: '/pay/[id]', params: { id: created.order_id } });
@@ -209,6 +223,7 @@ export default function CheckoutScreen(): ReactNode {
     note,
     reload,
     router,
+    selectedStore,
     selectedStoreId,
     useAsap,
   ]);
@@ -416,6 +431,16 @@ export default function CheckoutScreen(): ReactNode {
 
           {/* Solo subtotal: el total lo calcula la caja. */}
           <Text style={styles.summaryNote}>{strings.checkout.taxNote}</Text>
+
+          {selectedStore?.payments_mode === 'counter' ? (
+            <View style={styles.counterNote}>
+              <Ionicons name="cash-outline" size={20} color={colors.primary} />
+              <View style={styles.counterNoteBody}>
+                <Text style={styles.counterNoteTitle}>{strings.checkout.payAtCounterTitle}</Text>
+                <Text style={styles.summaryNote}>{strings.checkout.payAtCounterBody}</Text>
+              </View>
+            </View>
+          ) : null}
         </View>
 
         {failure !== null ? (
@@ -545,6 +570,19 @@ function createStyles(colors: BrandColors) {
     summaryLabel: { color: colors.textMuted, fontSize: typography.body.fontSize },
     summaryValue: { color: colors.text, fontSize: typography.title.fontSize, fontWeight: '800' },
     summaryNote: { color: colors.textFaint, fontSize: typography.caption.fontSize, lineHeight: 18 },
+    counterNote: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+      alignItems: 'flex-start',
+      marginTop: spacing.sm,
+      padding: spacing.md,
+      borderRadius: radius.md,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    counterNoteBody: { flex: 1, minWidth: 0, gap: 2 },
+    counterNoteTitle: { color: colors.text, fontSize: typography.body.fontSize, fontWeight: '800' },
 
     failure: {
       flexDirection: 'row',

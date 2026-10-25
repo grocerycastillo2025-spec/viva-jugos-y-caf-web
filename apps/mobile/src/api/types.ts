@@ -51,6 +51,10 @@ export interface StoreRow {
   // las dos escalas da un numero cien veces mayor.
   surcharge_policy: string;
   surcharge_rate: number | null;
+  // Migracion 0020. `counter` = se paga en el mostrador al recoger.
+  payments_mode?: 'simulated' | 'live' | 'counter';
+  catalog_source?: 'clover' | 'own';
+  currency?: string;
 }
 
 export interface StoreHoursRow {

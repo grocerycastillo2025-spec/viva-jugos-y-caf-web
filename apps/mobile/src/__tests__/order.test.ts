@@ -41,12 +41,14 @@ describe('estados del pedido', () => {
       const text =
         `${strings.order.status[status]} ${strings.order.statusHint[status]}`.toLowerCase();
       assert.ok(!text.includes('ready'), `"${status}" promete que esta listo`);
+      assert.ok(!/\blisto\b|recoger(lo|la)\b/.test(text), `"${status}" promete que esta listo`);
     }
   });
 
   it('payment_pending no dice "confirmado"', () => {
     const text = strings.order.status.payment_pending.toLowerCase();
     assert.ok(!text.includes('confirmed'), 'un pedido sin pagar no puede leerse como confirmado');
+    assert.ok(!/confirmad|recibido/.test(text), 'un pedido sin pagar no puede leerse como confirmado');
   });
 
   it('separa los activos de los terminados', () => {

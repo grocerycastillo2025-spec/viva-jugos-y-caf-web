@@ -1,0 +1,73 @@
+name: Base de datos (Supabase)
+
+# Aplica las migraciones al proyecto de Supabase de VIVA y, la primera vez,
+# da de alta el negocio. Se lanza a mano: Actions -> "Base de datos
+# (Supabase)" -> Run workflow.
+#
+# Secreto necesario (Settings -> Secrets and variables -> Actions):
+#   SUPABASE_DB_URL   Supabase -> Connect -> Session pooler (puerto 5432)
+#                     postgresql://postgres.<ref>:<password>@<host>:5432/postgres
+#
+# Es idempotente: `supabase db push` solo aplica las migraciones que falten
+# y el alta (supabase/seed/viva_jugos_mx.sql) no pisa nada que exista.
+
+on:
+  workflow_dispatch:
+    inputs:
+      alta_negocio:
+        description: 'Dar de alta VIVA Jugos y Café (solo la primera vez; no borra nada)'
+        type: boolean
+        default: false
+      dueno_email:
+        description: 'Correo del dueño (opcional). Tiene que haberse registrado antes en la app.'
+        type: string
+        required: false
+
+concurrency:
+  group: supabase-db
+  cancel-in-progress: false
+
+jobs:
+  migrar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Comprobar el secreto
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$DB_URL" ]; then
+            echo "::error::Falta el secreto SUPABASE_DB_URL (Supabase -> Connect -> Session pooler, puerto 5432)."
+            exit 1
+          fi
+
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Aplicar migraciones
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: pnpm supabase db push --db-url "$DB_URL" --include-all
+
+      - name: Alta del negocio
+        if: ${{ inputs.alta_negocio }}
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/seed/viva_jugos_mx.sql
+
+      - name: Dar permisos de dueño
+        if: ${{ inputs.dueno_email != '' }}
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          EMAIL: ${{ inputs.dueno_email }}
+        run: |
+          # El correo va como variable de psql, nunca pegado en el SQL.
+          # (psql solo sustituye variables en la entrada, no en -c.)
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -v email="$EMAIL" -tA <<'SQL'
+          select app.grant_restaurant_role(:'email', '11111111-1111-4111-8111-111111111111', 'owner');
+          SQL

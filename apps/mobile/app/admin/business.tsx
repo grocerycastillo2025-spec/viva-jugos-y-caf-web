@@ -1,0 +1,396 @@
+/**
+ * Panel · Negocio: datos de la sucursal, horario y marca.
+ *
+ * El horario es el que manda en el checkout: la base solo acepta pedidos
+ * para horas dentro de el (`app.store_accepts_pickup_at`). Por eso se
+ * valida entera la semana antes de guardar.
+ */
+
+import { Image } from 'expo-image';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
+
+import {
+  fetchAdminHours,
+  fetchAdminSettings,
+  replaceHours,
+  updateSettings,
+  updateStore,
+  uploadImage,
+} from '../../src/api/admin';
+import type { AppSettingsRow, StoreHoursRow, StoreRow } from '../../src/api/types';
+import { useAdmin } from '../../src/admin/admin-context';
+import { canPickImages, pickLogo } from '../../src/admin/pick-image';
+import { adminStrings as t } from '../../src/admin/strings';
+import { AdminShell, Card, Field, Notice, Toggle, createAdminStyles } from '../../src/admin/ui';
+import { DataState } from '../../src/components/DataState';
+import { Button } from '../../src/components/ui';
+import {
+  clockFromDb,
+  normalizeHex,
+  parseClockInput,
+  validateWeek,
+  type DayHours,
+} from '../../src/domain/admin';
+import type { BrandColors } from '../../src/domain/branding';
+import { useAsync } from '../../src/hooks/use-async';
+import { useBranding, useColors } from '../../src/state/branding-context';
+import { radius, spacing, type as typography } from '../../src/theme';
+
+export default function AdminBusinessScreen(): ReactNode {
+  const { store, restaurantId, isOwner } = useAdmin();
+
+  const load = useCallback(async () => {
+    const [hours, settings] = await Promise.all([
+      fetchAdminHours(store.id),
+      fetchAdminSettings(restaurantId),
+    ]);
+    return { hours, settings };
+  }, [store.id, restaurantId]);
+
+  const { data, error, loading, reload } = useAsync(load, [store.id]);
+
+  if (!isOwner) {
+    return (
+      <AdminShell>
+        <Notice tone="error" text={t.ownerOnly} />
+      </AdminShell>
+    );
+  }
+
+  if (data === null) {
+    return (
+      <AdminShell scroll={false}>
+        <DataState loading={loading} error={error} empty={false} onRetry={reload} emptyTitle="">
+          {null}
+        </DataState>
+      </AdminShell>
+    );
+  }
+
+  return (
+    <AdminShell>
+      <View style={layoutStyles.layout}>
+        <View style={layoutStyles.column}>
+          <StoreCard store={store} />
+          <HoursCard storeId={store.id} hours={data.hours} />
+        </View>
+        <View style={layoutStyles.column}>
+          {data.settings !== null ? <BrandCard settings={data.settings} restaurantId={restaurantId} /> : null}
+        </View>
+      </View>
+    </AdminShell>
+  );
+}
+
+const layoutStyles = StyleSheet.create({
+  layout: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.lg, alignItems: 'flex-start' },
+  column: { flexGrow: 1, flexBasis: 340, minWidth: 0, gap: spacing.lg },
+});
+
+function useSaver(): {
+  saving: boolean;
+  notice: { tone: 'ok' | 'error'; text: string } | null;
+  run: (work: () => Promise<void>) => Promise<void>;
+} {
+  const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
+  const run = useCallback(async (work: () => Promise<void>) => {
+    setSaving(true);
+    setNotice(null);
+    try {
+      await work();
+      setNotice({ tone: 'ok', text: t.saved });
+    } catch (cause) {
+      setNotice({
+        tone: 'error',
+        text: `${t.saveFailed}: ${cause instanceof Error ? cause.message : String(cause)}`,
+      });
+    } finally {
+      setSaving(false);
+    }
+  }, []);
+  return { saving, notice, run };
+}
+
+function StoreCard({ store }: { readonly store: StoreRow }): ReactNode {
+  const { reloadStore } = useAdmin();
+  const [name, setName] = useState(store.name);
+  const [phone, setPhone] = useState(store.phone ?? '');
+  const [address, setAddress] = useState(store.address_line1 ?? '');
+  const [city, setCity] = useState(store.city ?? '');
+  const [state, setState] = useState(store.state ?? '');
+  const [postal, setPostal] = useState(store.postal_code ?? '');
+  const [pickup, setPickup] = useState(store.pickup_enabled);
+  const { saving, notice, run } = useSaver();
+
+  const blank = (value: string): string | null => (value.trim() === '' ? null : value.trim());
+
+  return (
+    <Card title={t.business.store}>
+      <Field label={t.business.name} value={name} onChangeText={setName} />
+      <Field label={t.business.phone} value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+      <Field label={t.business.address} value={address} onChangeText={setAddress} />
+      <Field label={t.business.city} value={city} onChangeText={setCity} />
+      <Field label={t.business.state} value={state} onChangeText={setState} />
+      <Field label={t.business.postalCode} value={postal} onChangeText={setPostal} keyboardType="number-pad" />
+      <Toggle label={t.business.pickup} hint={t.business.pickupHint} value={pickup} onValueChange={setPickup} />
+      {notice !== null ? <Notice tone={notice.tone} text={notice.text} /> : null}
+      <Button
+        label={saving ? t.saving : t.save}
+        busy={saving}
+        disabled={name.trim() === ''}
+        onPress={() =>
+          void run(async () => {
+            await updateStore(store.id, {
+              name: name.trim(),
+              phone: blank(phone),
+              address_line1: blank(address),
+              city: blank(city),
+              state: blank(state),
+              postal_code: blank(postal),
+              pickup_enabled: pickup,
+            });
+            reloadStore();
+          })
+        }
+      />
+    </Card>
+  );
+}
+
+function initialWeek(hours: readonly StoreHoursRow[]): DayHours[] {
+  return [0, 1, 2, 3, 4, 5, 6].map((weekday) => {
+    const row = hours.find((h) => h.weekday === weekday);
+    return row === undefined
+      ? { weekday, open: false, opensAt: '08:00', closesAt: '20:00' }
+      : { weekday, open: true, opensAt: clockFromDb(row.opens_at), closesAt: clockFromDb(row.closes_at) };
+  });
+}
+
+function HoursCard({
+  storeId,
+  hours,
+}: {
+  readonly storeId: string;
+  readonly hours: readonly StoreHoursRow[];
+}): ReactNode {
+  const colors = useColors();
+  const styles = useMemo(() => ({ ...createAdminStyles(colors), ...createStyles(colors) }), [colors]);
+  const [week, setWeek] = useState<DayHours[]>(() => initialWeek(hours));
+  const { saving, notice, run } = useSaver();
+  const problems = validateWeek(week);
+
+  const patch = (weekday: number, change: Partial<DayHours>): void =>
+    setWeek((current) => current.map((day) => (day.weekday === weekday ? { ...day, ...change } : day)));
+
+  // Lunes primero, como se lee un horario en Mexico.
+  const ordered = [1, 2, 3, 4, 5, 6, 0].map((d) => week.find((day) => day.weekday === d)).filter(
+    (day): day is DayHours => day !== undefined,
+  );
+
+  return (
+    <Card title={t.business.hours}>
+      <Text style={styles.hint}>{t.business.hoursHint}</Text>
+      {ordered.map((day) => {
+        const problem = problems.find((p) => p.weekday === day.weekday);
+        return (
+          <View key={day.weekday} style={styles.dayRow}>
+            <View style={styles.dayHead}>
+              <Text style={styles.dayName}>{t.business.weekdays[day.weekday]}</Text>
+              <Toggle
+                label={day.open ? t.business.open : t.business.closed}
+                value={day.open}
+                onValueChange={(open) => patch(day.weekday, { open })}
+              />
+            </View>
+            {day.open ? (
+              <View style={styles.dayTimes}>
+                <View style={styles.timeField}>
+                  <Field
+                    label={t.business.opens}
+                    value={day.opensAt}
+                    onChangeText={(opensAt) => patch(day.weekday, { opensAt })}
+                  />
+                </View>
+                <View style={styles.timeField}>
+                  <Field
+                    label={t.business.closes}
+                    value={day.closesAt}
+                    onChangeText={(closesAt) => patch(day.weekday, { closesAt })}
+                  />
+                </View>
+              </View>
+            ) : null}
+            {problem !== undefined ? (
+              <Text style={styles.error}>
+                {problem.reason === 'bad_time' ? t.business.badTime : t.business.closesBeforeOpens}
+              </Text>
+            ) : null}
+          </View>
+        );
+      })}
+      {notice !== null ? <Notice tone={notice.tone} text={notice.text} /> : null}
+      <Button
+        label={saving ? t.saving : t.save}
+        busy={saving}
+        disabled={problems.length > 0}
+        onPress={() =>
+          void run(() =>
+            replaceHours(
+              storeId,
+              week
+                .filter((day) => day.open)
+                .map((day) => ({
+                  weekday: day.weekday,
+                  opens_at: parseClockInput(day.opensAt) ?? day.opensAt,
+                  closes_at: parseClockInput(day.closesAt) ?? day.closesAt,
+                })),
+            ),
+          )
+        }
+      />
+    </Card>
+  );
+}
+
+function BrandCard({
+  settings,
+  restaurantId,
+}: {
+  readonly settings: AppSettingsRow;
+  readonly restaurantId: string;
+}): ReactNode {
+  const colors = useColors();
+  const styles = useMemo(() => ({ ...createAdminStyles(colors), ...createStyles(colors) }), [colors]);
+  const branding = useBranding();
+  const [displayName, setDisplayName] = useState(settings.app_display_name);
+  const [logoUrl, setLogoUrl] = useState<string | null>(settings.logo_url);
+  const [primary, setPrimary] = useState(settings.primary_color);
+  const [secondary, setSecondary] = useState(settings.secondary_color);
+  const [accent, setAccent] = useState(settings.accent_color);
+  const [uploading, setUploading] = useState(false);
+  const { saving, notice, run } = useSaver();
+
+  const hex = { primary: normalizeHex(primary), secondary: normalizeHex(secondary), accent: normalizeHex(accent) };
+  const valid = hex.primary !== null && hex.secondary !== null && hex.accent !== null && displayName.trim() !== '';
+
+  const chooseLogo = async (): Promise<void> => {
+    const picked = await pickLogo();
+    if (picked === null) return;
+    setUploading(true);
+    try {
+      setLogoUrl(await uploadImage('branding', restaurantId, picked.blob, picked.extension));
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const swatch = (value: string | null): ReactNode => (
+    <View style={[styles.swatch, { backgroundColor: value ?? 'transparent' }]} />
+  );
+
+  return (
+    <Card title={t.business.brand}>
+      <Field label={t.business.displayName} value={displayName} onChangeText={setDisplayName} />
+
+      <View style={styles.field}>
+        <Text style={styles.label}>{t.business.logo}</Text>
+        <View style={styles.logoRow}>
+          <View style={[styles.logoBox, { backgroundColor: hex.primary ?? colors.primary }]}>
+            {logoUrl !== null ? (
+              <Image source={{ uri: logoUrl }} style={styles.logo} contentFit="contain" />
+            ) : null}
+          </View>
+          {canPickImages ? (
+            <Button
+              label={t.business.chooseLogo}
+              variant="outline"
+              busy={uploading}
+              onPress={() => void chooseLogo()}
+            />
+          ) : (
+            <Text style={styles.hint}>{t.product.photoNativeOnly}</Text>
+          )}
+        </View>
+      </View>
+
+      <Text style={styles.label}>{t.business.colors}</Text>
+      {(
+        [
+          ['primary', t.business.primary, primary, setPrimary],
+          ['secondary', t.business.secondary, secondary, setSecondary],
+          ['accent', t.business.accent, accent, setAccent],
+        ] as const
+      ).map(([key, label, value, set]) => (
+        <View key={key} style={styles.colorRow}>
+          {swatch(hex[key])}
+          <View style={styles.grow}>
+            <Field
+              label={label}
+              value={value}
+              onChangeText={set}
+              autoCapitalize="characters"
+              error={hex[key] === null ? t.business.colorInvalid : null}
+            />
+          </View>
+        </View>
+      ))}
+
+      <Text style={styles.hint}>{t.business.brandNote}</Text>
+      {notice !== null ? <Notice tone={notice.tone} text={notice.text} /> : null}
+      <Button
+        label={saving ? t.saving : t.save}
+        busy={saving}
+        disabled={!valid || uploading}
+        onPress={() =>
+          void run(async () => {
+            if (hex.primary === null || hex.secondary === null || hex.accent === null) return;
+            await updateSettings(restaurantId, {
+              app_display_name: displayName.trim(),
+              logo_url: logoUrl,
+              primary_color: hex.primary,
+              secondary_color: hex.secondary,
+              accent_color: hex.accent,
+            });
+            branding.reload();
+          })
+        }
+      />
+    </Card>
+  );
+}
+
+function createStyles(colors: BrandColors) {
+  return StyleSheet.create({
+    dayRow: {
+      gap: spacing.sm,
+      paddingVertical: spacing.sm,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+    },
+    dayHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+    dayName: { width: 96, color: colors.text, fontWeight: '800', fontSize: typography.body.fontSize },
+    dayTimes: { flexDirection: 'row', gap: spacing.md },
+    timeField: { flex: 1, minWidth: 0 },
+    logoRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, flexWrap: 'wrap' },
+    logoBox: {
+      width: 120,
+      height: 80,
+      borderRadius: radius.md,
+      alignItems: 'center',
+      justifyContent: 'center',
+      overflow: 'hidden',
+    },
+    logo: { width: 108, height: 68 },
+    colorRow: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.md },
+    swatch: {
+      width: 46,
+      height: 46,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    grow: { flex: 1, minWidth: 0 },
+  });
+}

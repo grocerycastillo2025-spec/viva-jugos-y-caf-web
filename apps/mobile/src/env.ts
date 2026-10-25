@@ -32,6 +32,19 @@ export interface AppEnv {
   readonly appEnv: string;
 }
 
+/**
+ * Moneda e idioma del negocio. No dependen de Supabase, asi que no pasan
+ * por `readEnv()` (que lanza si faltan credenciales): se leen siempre.
+ */
+export function readLocaleConfig(): { currency: string; locale: string } {
+  const currency =
+    (process.env.EXPO_PUBLIC_CURRENCY ?? '').trim().toUpperCase() ||
+    extraString('currency') ||
+    'MXN';
+  const locale = (process.env.EXPO_PUBLIC_LOCALE ?? '').trim() || extraString('locale') || 'es-MX';
+  return { currency, locale };
+}
+
 export class MissingConfigError extends Error {
   constructor(message: string) {
     super(message);

@@ -15,7 +15,7 @@ import type { AppSettingsRow, StoreHoursRow, StoreRow } from './types';
 const STORE_COLUMNS =
   'id, restaurant_id, name, slug, status, address_line1, address_line2, city, state, ' +
   'postal_code, latitude, longitude, phone, timezone, pickup_enabled, delivery_enabled, ' +
-  'surcharge_policy, surcharge_rate';
+  'surcharge_policy, surcharge_rate, payments_mode, catalog_source, currency';
 
 export interface StoreInfo {
   readonly store: StoreRow;

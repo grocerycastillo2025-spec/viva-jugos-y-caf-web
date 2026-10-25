@@ -21,7 +21,7 @@ import { Screen } from '../../src/components/Screen';
 import { Button, SectionTitle } from '../../src/components/ui';
 import type { BrandColors } from '../../src/domain/branding';
 import { pastOrderToCart, revalidateCart } from '../../src/domain/cart';
-import { formatMoney } from '../../src/domain/money';
+import { formatMoney, moneyDefaults } from '../../src/domain/money';
 import { displayAmountCents, isActiveOrder } from '../../src/domain/order';
 import { useAsync } from '../../src/hooks/use-async';
 import { useColors } from '../../src/state/branding-context';
@@ -152,7 +152,7 @@ export default function OrdersScreen(): ReactNode {
             <Text style={styles.cardNumber}>{strings.order.number(order.order_number)}</Text>
             <Text style={styles.cardStatus}>{strings.order.status[order.status]}</Text>
             <Text style={styles.cardMeta}>
-              {strings.orders.itemsCount(units)} · {new Date(order.created_at).toLocaleDateString()}
+              {strings.orders.itemsCount(units)} · {new Date(order.created_at).toLocaleDateString(moneyDefaults().locale)}
             </Text>
           </View>
           <View style={styles.cardSide}>

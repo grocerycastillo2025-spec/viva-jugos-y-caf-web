@@ -7,7 +7,7 @@
     <title>%WEB_TITLE%</title>
 
     <!--
-      App web / PWA de Viva Juice and Coffee.
+      App web / PWA de VIVA Jugos y Café.
       `__BASE__` lo sustituye scripts/web-postbuild.mjs por la ruta donde se
       sirve la app ("/" con dominio propio, "/<repo>/" en GitHub Pages).
     -->
@@ -17,7 +17,7 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="apple-mobile-web-app-title" content="Viva" />
+    <meta name="apple-mobile-web-app-title" content="VIVA" />
 
     <!-- Reset recomendado por react-native-web. -->
     <style id="expo-reset">
@@ -50,12 +50,16 @@
           background-color: #f5f0e6;
           box-shadow: 0 0 40px rgba(0, 0, 0, 0.25);
         }
+        /* El Panel del negocio (/admin) se trabaja en computadora: mas ancho. */
+        body.admin-wide #root {
+          max-width: 1180px;
+        }
       }
     </style>
   </head>
 
   <body>
-    <noscript>Viva Juice needs JavaScript to run.</noscript>
+    <noscript>VIVA Jugos y Café necesita JavaScript para funcionar.</noscript>
     <div id="root"></div>
     <script>
       // Service worker: hace la app instalable y abre al instante la

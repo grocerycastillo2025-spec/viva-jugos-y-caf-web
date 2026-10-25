@@ -3,11 +3,17 @@ import { StatusBar } from 'expo-status-bar';
 import type { ReactNode } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { configureMoney } from '../src/domain/money';
+import { readLocaleConfig } from '../src/env';
 import { BrandingProvider, useColors } from '../src/state/branding-context';
 import { CartProvider } from '../src/state/cart-context';
 import { PushProvider } from '../src/state/push-context';
 import { SessionProvider } from '../src/state/session-context';
 import { StoreProvider } from '../src/state/store-context';
+
+// Moneda e idioma del negocio, antes de pintar el primer precio.
+const localeConfig = readLocaleConfig();
+configureMoney(localeConfig.currency, localeConfig.locale);
 
 /**
  * El stack va en su propio componente porque necesita los colores de la

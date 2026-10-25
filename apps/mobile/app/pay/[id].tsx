@@ -40,7 +40,7 @@ import { Screen, useScreenInsets } from '../../src/components/Screen';
 import { SurchargeNotice } from '../../src/components/SurchargeNotice';
 import { Button } from '../../src/components/ui';
 import type { BrandColors } from '../../src/domain/branding';
-import { formatMoney } from '../../src/domain/money';
+import { formatMoney, moneyDefaults } from '../../src/domain/money';
 import { isPayable } from '../../src/domain/order';
 import {
   resumeUnrecordedAttempt,
@@ -374,7 +374,7 @@ export default function PayScreen(): ReactNode {
                 {strings.payment.attempt(
                   strings.payment.statusLabel[payment.status],
                   formatMoney(payment.amount_cents),
-                  new Date(payment.created_at).toLocaleTimeString(),
+                  new Date(payment.created_at).toLocaleTimeString(moneyDefaults().locale),
                 )}
               </Text>
             ))}

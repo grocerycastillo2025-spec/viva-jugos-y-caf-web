@@ -54,18 +54,23 @@ export interface OrderRow {
   ready_at: string | null;
   completed_at: string | null;
   canceled_at: string | null;
+  // Migracion 0020. `counter` = se paga en el mostrador al recoger.
+  payment_method: 'counter' | 'online' | null;
+  customer_name: string | null;
+  cancel_reason: string | null;
 }
 
 export interface OrderWithItems extends OrderRow {
   order_items: OrderItemRow[];
 }
 
-const ORDER_COLUMNS =
+export const ORDER_COLUMNS =
   'id, store_id, order_number, business_day, pickup_code, status, fulfillment, ' +
   'pickup_at, is_asap, customer_note, currency, idempotency_key, subtotal_cents, discount_cents, ' +
-  'tax_cents, tip_cents, total_cents, created_at, ready_at, completed_at, canceled_at';
+  'tax_cents, tip_cents, total_cents, created_at, ready_at, completed_at, canceled_at, ' +
+  'payment_method, customer_name, cancel_reason';
 
-const ITEM_COLUMNS =
+export const ITEM_COLUMNS =
   'order_items(id, clover_item_id, name_snapshot, unit_price_snapshot_cents, quantity, ' +
   'line_total_cents, note, sort_order, ' +
   'order_item_modifiers(clover_modifier_id, name_snapshot, price_snapshot_cents))';
@@ -200,10 +205,48 @@ export async function createPickupOrder(input: CreateOrderInput): Promise<Create
   return data as CreatedOrder;
 }
 
+/**
+ * Pedido que se paga en el mostrador (migracion 0020). Mismo contrato que
+ * `createPickupOrder`: solo ids y cantidades, los precios los pone la
+ * base. El servidor solo lo acepta en sucursales sin Clover que cobran en
+ * mostrador, y lo deja directamente `confirmed`.
+ */
+export async function placeCounterOrder(input: CreateOrderInput): Promise<CreatedOrder> {
+  const { data, error } = await getSupabase().rpc('place_counter_order', {
+    p_store_id: input.storeId,
+    p_idempotency_key: input.idempotencyKey,
+    p_pickup_at: input.pickupAt,
+    p_is_asap: input.isAsap,
+    p_customer_note: input.customerNote,
+    p_items: input.items.map((item) => ({
+      clover_item_id: item.clover_item_id,
+      quantity: item.quantity,
+      note: item.note,
+      modifiers: [...item.modifiers],
+    })),
+  });
+
+  if (error) throw dataError(error.message, error.code);
+  if (data === null || data === undefined) {
+    throw dataError('El servidor no devolvio el pedido creado');
+  }
+  return data as CreatedOrder;
+}
+
 export async function fetchMyOrders(limit = 30): Promise<OrderWithItems[]> {
-  const { data, error } = await getSupabase()
+  const supabase = getSupabase();
+  // Filtro EXPLICITO por usuario. Antes bastaba la RLS (`orders_self_read`),
+  // pero desde la 0020 el dueño y los empleados tambien ven por RLS todos
+  // los pedidos del negocio, y su pestaña "Pedidos" tiene que seguir
+  // ensenando solo los suyos como cliente.
+  const { data: auth } = await supabase.auth.getSession();
+  const userId = auth.session?.user.id;
+  if (userId === undefined) return [];
+
+  const { data, error } = await supabase
     .from('orders')
     .select(`${ORDER_COLUMNS}, ${ITEM_COLUMNS}`)
+    .eq('user_id', userId)
     .order('created_at', { ascending: false })
     .limit(limit)
     .returns<OrderWithItems[]>();

@@ -62,6 +62,14 @@ jobs:
             echo "::error::Tablas publicas sin RLS: $MISSING"; exit 1
           fi
           echo "OK: todas las tablas publicas tienen RLS"
+      - name: Pruebas de permisos (supabase/tests)
+        env:
+          PGPASSWORD: postgres
+        run: |
+          for f in supabase/tests/*.test.sql; do
+            echo "-- $f"
+            psql -h localhost -U postgres -v ON_ERROR_STOP=1 -q -f "$f"
+          done
 
   secret-scan:
     runs-on: ubuntu-latest
