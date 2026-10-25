@@ -20,7 +20,6 @@
 -- Requiere las migraciones hasta la 0022 y viva_jugos_mx.sql.
 -- =====================================================================
 
-begin;
 
 -- Ubicación del menú impreso (solo si el dueño no la ha llenado).
 update public.stores
@@ -35,8 +34,12 @@ update public.app_settings
  where restaurant_id = '11111111-1111-4111-8111-111111111111'
    and primary_color = '#0E4A2B';
 
-create temp table _img (base text) on commit drop;
-insert into _img values ('https://grocerycastillo2025-spec.github.io/viva-jugos-y-caf-web/img');
+-- Tablas de trabajo normales (no temporales): el SQL Editor de Supabase
+-- no conserva tablas temporales entre sentencias. Se borran al final.
+drop table if exists public._viva_seed_img;
+drop table if exists public._viva_seed_p;
+create table public._viva_seed_img (base text);
+insert into public._viva_seed_img values ('https://grocerycastillo2025-spec.github.io/viva-jugos-y-caf-web/img');
 
 -- ---------------------------------------------------------------------
 -- Categorías
@@ -52,12 +55,12 @@ on conflict (store_id, clover_category_id) do nothing;
 -- ---------------------------------------------------------------------
 -- Productos (precio = 500 ml)
 -- ---------------------------------------------------------------------
-create temp table _p (
+create table public._viva_seed_p (
   item text, cat text, name text, descr text, price bigint, img text,
   featured boolean, badge text, ord int
-) on commit drop;
+);
 
-insert into _p values
+insert into public._viva_seed_p values
   ('viva-viva-juice',    'viva-cat-jugos',    'Viva Juice',        'Naranja, zanahoria y betabel',                    3500, 'viva-juice',        true,  'Popular', 10),
   ('viva-jugo-verde',    'viva-cat-jugos',    'Jugo Verde',        'Pepino, apio, kale, jengibre, manzana y naranja', 3500, 'jugo-verde',        true,  null,      20),
   ('viva-super-detox',   'viva-cat-jugos',    'Super Detox',       'Zanahoria, manzana, apio y limón',                3500, 'super-detox',       false, null,      30),
@@ -73,7 +76,7 @@ insert into _p values
 
 insert into public.catalog_items (store_id, clover_item_id, category_id, name, price_cents)
 select '33333333-3333-4333-8333-333333333333', p.item, c.id, p.name, p.price
-  from _p p
+  from public._viva_seed_p p
   join public.catalog_categories c
     on c.store_id = '33333333-3333-4333-8333-333333333333' and c.clover_category_id = p.cat
 on conflict (store_id, clover_item_id) do nothing;
@@ -81,9 +84,9 @@ on conflict (store_id, clover_item_id) do nothing;
 insert into public.app_item_overrides
   (store_id, clover_item_id, marketing_copy, image_url, featured, badge, sort_order)
 select '33333333-3333-4333-8333-333333333333', p.item, p.descr,
-       case when p.img is null then null else (select base from _img) || '/menu/' || p.img || '.jpg' end,
+       case when p.img is null then null else (select base from public._viva_seed_img) || '/menu/' || p.img || '.jpg' end,
        p.featured, p.badge, p.ord
-  from _p p
+  from public._viva_seed_p p
 on conflict (store_id, clover_item_id) do nothing;
 
 -- ---------------------------------------------------------------------
@@ -127,10 +130,10 @@ insert into public.catalog_item_modifier_groups (item_id, modifier_group_id, sor
 select i.id, g.id, l.ord
   from (
     -- Tamaño: todo menos el café.
-    select item, 'viva-grp-tamano' as grp, 10 as ord from _p where cat <> 'viva-cat-cafe'
+    select item, 'viva-grp-tamano' as grp, 10 as ord from public._viva_seed_p where cat <> 'viva-cat-cafe'
     union all
     -- Leche: licuados y licuados con proteína.
-    select item, 'viva-grp-leche', 20 from _p where cat in ('viva-cat-licuados', 'viva-cat-proteina')
+    select item, 'viva-grp-leche', 20 from public._viva_seed_p where cat in ('viva-cat-licuados', 'viva-cat-proteina')
     union all
     select 'viva-crea-el-tuyo', 'viva-grp-crea', 5
   ) as l
@@ -146,7 +149,7 @@ on conflict (item_id, modifier_group_id) do nothing;
 -- ---------------------------------------------------------------------
 insert into public.stories (restaurant_id, media_url, media_type, caption, item_id, sort_order, created_by)
 select '11111111-1111-4111-8111-111111111111',
-       (select base from _img) || '/historias/' || s.img || '.jpg',
+       (select base from public._viva_seed_img) || '/historias/' || s.img || '.jpg',
        'image', s.caption,
        (select i.id from public.catalog_items i
          where i.store_id = '33333333-3333-4333-8333-333333333333' and i.clover_item_id = s.item),
@@ -167,7 +170,9 @@ select '11111111-1111-4111-8111-111111111111',
   ) as s(img, item, caption, ord)
  where not exists (
    select 1 from public.stories st
-    where st.media_url = (select base from _img) || '/historias/' || s.img || '.jpg'
+    where st.media_url = (select base from public._viva_seed_img) || '/historias/' || s.img || '.jpg'
  );
 
-commit;
+drop table if exists public._viva_seed_img;
+drop table if exists public._viva_seed_p;
+
