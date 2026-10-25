@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { trackEvent } from '../src/analytics/track';
 import { fetchStories, type StoryRow } from '../src/api/stories';
+import { cachedStories, preloadStory } from '../src/state/stories-cache';
 import { StoryVideo } from '../src/components/StoryVideo';
 import { IMAGE_STORY_MS, orderForViewer } from '../src/domain/stories';
 import { readEnv } from '../src/env';
@@ -30,15 +31,29 @@ export default function StoriesViewer(): ReactNode {
   const { colors, displayName } = useBranding();
   const seen = useSeenStories();
 
-  const [stories, setStories] = useState<StoryRow[] | null>(null);
-  const [index, setIndex] = useState(0);
+  // Si Inicio ya bajó las historias, el visor abre al instante con ellas.
+  const initial = useMemo(() => {
+    const list = cachedStories();
+    if (list === null) return null;
+    const ordered = orderForViewer(list, seen);
+    const start = ordered.findIndex((s) => s.id === id);
+    return { ordered, start: start === -1 ? 0 : start };
+    // Solo al abrir: reordenar mientras se ven las moveria de sitio.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const [stories, setStories] = useState<StoryRow[] | null>(initial?.ordered ?? null);
+  const [index, setIndex] = useState(initial?.start ?? 0);
   const [progress, setProgress] = useState(0);
   const [paused, setPaused] = useState(false);
-  const orderFixed = useRef(false);
+  // La foto de la historia actual ya se ve. El reloj de 5 s no corre antes:
+  // con internet lento la historia no se salta sin haberse visto.
+  const [loadedId, setLoadedId] = useState<string | null>(null);
+  const orderFixed = useRef(initial !== null);
 
-  // Se ordena UNA vez al abrir (lo no visto primero) y se arranca en la
-  // historia tocada. Reordenar mientras se ven las moveria de sitio.
+  // Sin lista en memoria (se entró directo a /historias): se pide.
   useEffect(() => {
+    if (orderFixed.current) return;
     void fetchStories(readEnv().restaurantId)
       .then((list) => {
         if (orderFixed.current) return;
@@ -54,6 +69,7 @@ export default function StoriesViewer(): ReactNode {
   }, [id]);
 
   const current = stories?.[index] ?? null;
+  const loaded = current === null || current.media_type !== 'image' || loadedId === current.id;
 
   const close = useCallback(() => {
     if (router.canGoBack()) router.back();
@@ -76,16 +92,19 @@ export default function StoriesViewer(): ReactNode {
     setIndex((i) => Math.max(0, i - 1));
   }, []);
 
-  // Vista: se marca y se cuenta al empezar cada historia.
+  // Vista: se marca y se cuenta al empezar cada historia; se precarga la
+  // siguiente para que al pasar ya este lista.
   useEffect(() => {
     if (current === null) return;
     markStorySeen(current.id);
     trackEvent('story_view', current.id);
+    preloadStory(stories?.[index + 1]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current]);
 
   // Reloj de las imagenes.
   useEffect(() => {
-    if (current === null || current.media_type !== 'image' || paused) return undefined;
+    if (current === null || current.media_type !== 'image' || paused || !loaded) return undefined;
     const startedAt = Date.now() - progress * IMAGE_STORY_MS;
     const timer = setInterval(() => {
       const fraction = (Date.now() - startedAt) / IMAGE_STORY_MS;
@@ -99,7 +118,7 @@ export default function StoriesViewer(): ReactNode {
     return () => clearInterval(timer);
     // `progress` no va en dependencias: se lee al reanudar, no en cada tick.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [current, paused, next]);
+  }, [current, paused, loaded, next]);
 
   const styles = useMemo(() => createStyles(colors.primary, colors.onPrimary), [colors]);
 
@@ -126,11 +145,25 @@ export default function StoriesViewer(): ReactNode {
     <View style={styles.frame}>
       <View style={styles.media}>
         {current.media_type === 'image' ? (
-          <Image source={{ uri: current.media_url }} style={styles.fill} contentFit="contain" />
+          <Image
+            key={current.id}
+            source={{ uri: current.media_url }}
+            style={styles.fill}
+            contentFit="contain"
+            onLoad={() => setLoadedId(current.id)}
+            // Si la foto no carga, se cuenta como vista y el reloj sigue.
+            onError={() => setLoadedId(current.id)}
+          />
         ) : (
           <StoryVideo uri={current.media_url} paused={paused} onProgress={setProgress} onEnd={next} />
         )}
       </View>
+
+      {!loaded ? (
+        <View style={[styles.media, styles.center]} pointerEvents="none">
+          <ActivityIndicator color="#fff" size="large" />
+        </View>
+      ) : null}
 
       {/* Zonas de toque: izquierda atras, derecha adelante, mantener pausa. */}
       <View style={styles.touch}>

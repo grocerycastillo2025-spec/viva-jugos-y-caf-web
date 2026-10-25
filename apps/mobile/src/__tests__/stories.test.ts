@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import {
+  autoOpenStart,
   expiresFor,
+  localDay,
   hoursLeft,
   mediaTypeOf,
   orderForViewer,
@@ -60,5 +62,24 @@ describe('historias', () => {
 
   it('recorta la lista de vistos', () => {
     assert.deepEqual(trimSeen(['1', '2', '3'], 2), ['2', '3']);
+  });
+});
+
+describe('historias al abrir la app', () => {
+  const list = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
+  it('abre en la primera nueva, cada vez mientras haya nuevas', () => {
+    assert.equal(autoOpenStart(list, new Set(['a']), '2026-10-25', '2026-10-25'), 'b');
+    assert.equal(autoOpenStart(list, new Set(), null, '2026-10-25'), 'a');
+  });
+  it('si ya vio todas, solo la primera vez del día', () => {
+    const all = new Set(['a', 'b', 'c']);
+    assert.equal(autoOpenStart(list, all, '2026-10-24', '2026-10-25'), 'a');
+    assert.equal(autoOpenStart(list, all, '2026-10-25', '2026-10-25'), null);
+  });
+  it('sin historias no abre', () => {
+    assert.equal(autoOpenStart([], new Set(), null, '2026-10-25'), null);
+  });
+  it('día local', () => {
+    assert.equal(localDay(new Date(2026, 0, 5, 23, 59)), '2026-01-05');
   });
 });

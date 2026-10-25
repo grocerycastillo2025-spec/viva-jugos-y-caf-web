@@ -24,6 +24,11 @@ async function load(): Promise<string[]> {
   return seen;
 }
 
+/** Lo visto en este teléfono, ya leído del almacenamiento. */
+export async function loadSeenStories(): Promise<ReadonlySet<string>> {
+  return new Set(await load());
+}
+
 export function markStorySeen(id: string): void {
   void load().then((current) => {
     if (current.includes(id)) return;

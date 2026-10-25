@@ -21,13 +21,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { useCallback, useMemo, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, type ReactNode } from 'react';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { fetchFeaturedItems, fetchItemsRequiringChoice } from '../../src/api/menu';
 import { fetchStoreHours, formatClock, todayHours } from '../../src/api/store';
 import type { MenuItemRow, StoreHoursRow, StoreRow } from '../../src/api/types';
-import { fetchStories } from '../../src/api/stories';
 import { CartBar } from '../../src/components/CartBar';
 import { InstallBanner } from '../../src/components/InstallBanner';
 import { StoriesRow } from '../../src/components/StoriesRow';
@@ -42,6 +41,7 @@ import { useAsync } from '../../src/hooks/use-async';
 import { useContentWidth } from '../../src/hooks/use-content-width';
 import { needsChoice, useQuickAdd } from '../../src/hooks/use-quick-add';
 import { useBranding } from '../../src/state/branding-context';
+import { loadStories, takeAutoOpen } from '../../src/state/stories-cache';
 import { useStores } from '../../src/state/store-context';
 import { gridColumns, radius, spacing, type as typography } from '../../src/theme';
 import { strings } from '../../src/strings';
@@ -75,8 +75,21 @@ export default function HomeScreen(): ReactNode {
 
   // Historias (0022). Van aparte del resto de Inicio: si fallan, no
   // tumban la pantalla; simplemente no sale la fila.
-  const loadStories = useCallback(() => fetchStories(readEnv().restaurantId).catch(() => []), []);
-  const { data: stories } = useAsync(loadStories, []);
+  const getStories = useCallback(() => loadStories(readEnv().restaurantId).catch(() => []), []);
+  const { data: stories } = useAsync(getStories, []);
+
+  // Al abrir la app, las historias salen solas (como en Instagram): una
+  // vez por visita, empezando por las nuevas. Ver `autoOpenStart`.
+  useEffect(() => {
+    if (stories == null || stories.length === 0) return;
+    let alive = true;
+    void takeAutoOpen(stories).then((id) => {
+      if (alive && id !== null) router.push({ pathname: '/historias', params: { id } });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [router, stories]);
 
   const {
     selectedStore,
