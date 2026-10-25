@@ -29,6 +29,7 @@ import { fetchStoreHours, formatClock, todayHours } from '../../src/api/store';
 import type { MenuItemRow, StoreHoursRow, StoreRow } from '../../src/api/types';
 import { fetchStories } from '../../src/api/stories';
 import { CartBar } from '../../src/components/CartBar';
+import { InstallBanner } from '../../src/components/InstallBanner';
 import { StoriesRow } from '../../src/components/StoriesRow';
 import { readEnv } from '../../src/env';
 import { DataState } from '../../src/components/DataState';
@@ -141,6 +142,7 @@ export default function HomeScreen(): ReactNode {
   return (
     <>
       <Screen withTabBar refreshing={refreshing} onRefresh={refresh} contentStyle={styles.content}>
+        <InstallBanner />
         <StoriesRow stories={stories ?? []} />
 
         <View style={styles.hero}>

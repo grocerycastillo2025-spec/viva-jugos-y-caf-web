@@ -39,7 +39,7 @@ export const strings = {
   home: {
     heroTitle: 'Fresco, hecho al momento',
     heroBody:
-      'Jugos naturales, licuados, bowls y café de especialidad. Pide desde aquí y recoge en el mostrador.',
+      'Jugos naturales, licuados, licuados con proteína y café. Pide desde aquí y recoge en el mostrador.',
     seeMenu: 'Ver el menú',
     featured: 'Destacados',
     noFeatured: 'Todavía no hay productos destacados. Échale un ojo al menú completo.',
@@ -394,6 +394,30 @@ export const strings = {
     previous: 'Historia anterior',
     next: 'Siguiente historia',
     videoWebOnly: 'Este video se ve en la versión web de la app.',
+  },
+
+  install: {
+    title: 'Instala la app',
+    body: 'Tenla en tu pantalla de inicio: pide más rápido y junta puntos.',
+    install: 'Instalar app',
+    howTo: 'Cómo instalarla',
+    later: 'Ahora no',
+    close: 'Cerrar',
+    iosSteps: [
+      { icon: 'share-outline', text: 'Toca Compartir abajo en Safari (el cuadro con la flecha hacia arriba).' },
+      { icon: 'add-circle-outline', text: 'Baja y toca “Agregar a pantalla de inicio”.' },
+      { icon: 'checkmark-circle-outline', text: 'Toca “Agregar”. Listo: VIVA queda junto a tus apps.' },
+    ],
+    androidSteps: [
+      { icon: 'ellipsis-vertical', text: 'Toca el menú de 3 puntos arriba a la derecha en Chrome.' },
+      { icon: 'download-outline', text: 'Toca “Instalar app” (o “Agregar a pantalla principal”).' },
+      { icon: 'checkmark-circle-outline', text: 'Confirma con “Instalar”. Listo.' },
+    ],
+    inAppTitle: 'Ábrela en tu navegador para instalarla',
+    inAppIos: 'Toca los 3 puntos o el ícono de compartir y elige “Abrir en Safari”.',
+    inAppAndroid: 'Toca los 3 puntos arriba y elige “Abrir en Chrome”.',
+    copy: 'Copiar liga',
+    copied: 'Liga copiada. Pégala en Safari o Chrome.',
   },
 
   scanner: {

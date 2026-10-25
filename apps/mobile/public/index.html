@@ -62,6 +62,21 @@
     <noscript>VIVA Jugos y Café necesita JavaScript para funcionar.</noscript>
     <div id="root"></div>
     <script>
+      // Aviso de instalación (Chrome/Edge/Samsung). Llega una sola vez y
+      // a veces antes de que cargue la app, así que se guarda aquí y la
+      // app lo usa cuando la persona toca "Instalar app".
+      window.addEventListener('beforeinstallprompt', function (e) {
+        e.preventDefault();
+        window.__vivaInstallPrompt = e;
+        window.dispatchEvent(new Event('viva-install-ready'));
+      });
+      window.addEventListener('appinstalled', function () {
+        window.__vivaInstallPrompt = null;
+        window.__vivaInstalled = true;
+        window.dispatchEvent(new Event('viva-install-ready'));
+      });
+    </script>
+    <script>
       // Service worker: hace la app instalable y abre al instante la
       // segunda vez. Si falla, la app funciona igual.
       if ('serviceWorker' in navigator && location.protocol === 'https:') {
