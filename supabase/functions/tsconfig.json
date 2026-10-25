@@ -6,5 +6,5 @@
     "allowImportingTsExtensions": true,
     "lib": ["ES2022", "DOM"]
   },
-  "include": ["_shared", "oauth", "token-refresh"]
+  "include": ["_shared", "oauth", "token-refresh", "mp-pago", "mp-webhook"]
 }

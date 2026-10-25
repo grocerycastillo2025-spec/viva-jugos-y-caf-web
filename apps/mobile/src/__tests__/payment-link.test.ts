@@ -70,3 +70,16 @@ describe('Mercado Pago con liga y transferencia', () => {
     );
   });
 });
+
+describe('Mercado Pago automático', () => {
+  it('con la cuenta conectada no hace falta liga', () => {
+    assert.deepEqual(
+      customerMethods({ payment_options: { cash: true, mercadopago: true }, mercadopago_connected: true }),
+      ['cash', 'mercadopago'],
+    );
+    assert.deepEqual(
+      paymentSetupProblems({ options: { cash: true, mercadopago: true }, clabe: '', transferInfo: '', mpLink: '', mpConnected: true }),
+      [],
+    );
+  });
+});

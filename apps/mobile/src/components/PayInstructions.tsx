@@ -8,8 +8,10 @@
 
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
-import { useMemo, useState, type ReactNode } from 'react';
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+
+import { isMercadoPagoConnected, startMercadoPago } from '../api/mercadopago';
 
 import type { OrderRow } from '../api/orders';
 import type { StoreRow } from '../api/types';
@@ -33,7 +35,20 @@ export function PayInstructions({
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [copied, setCopied] = useState<string | null>(null);
+  const [mpAuto, setMpAuto] = useState(false);
+  const [opening, setOpening] = useState(false);
+  const [mpError, setMpError] = useState<string | null>(null);
   const t = strings.payments;
+  const storeId = store?.id ?? null;
+
+  useEffect(() => {
+    if (storeId === null || order.pay_with !== 'mercadopago') return;
+    let alive = true;
+    void isMercadoPagoConnected(storeId).then((value) => alive && setMpAuto(value));
+    return () => {
+      alive = false;
+    };
+  }, [storeId, order.pay_with]);
 
   if (!needsPaymentConfirmation(order.pay_with) || order.status === 'canceled') return null;
 
@@ -80,6 +95,22 @@ export function PayInstructions({
     </View>
   );
 
+  const payAuto = async (): Promise<void> => {
+    setOpening(true);
+    setMpError(null);
+    try {
+      const url = await startMercadoPago(order.id);
+      // En la web se va en la misma pestaña: Mercado Pago regresa solo
+      // a la pantalla del pedido al terminar.
+      if (Platform.OS === 'web') window.location.assign(url);
+      else await Linking.openURL(url);
+    } catch (cause) {
+      const reason = cause instanceof Error ? cause.message : '';
+      setMpError(t.mpErrors[reason] ?? t.mpFailed);
+      setOpening(false);
+    }
+  };
+
   const link = store?.mercadopago_link ?? null;
   const clabe = store?.transfer_clabe ?? null;
 
@@ -90,7 +121,18 @@ export function PayInstructions({
         <Text style={styles.title}>{t.payTitle}</Text>
       </View>
 
-      {order.pay_with === 'mercadopago' ? (
+      {order.pay_with === 'mercadopago' && mpAuto ? (
+        <>
+          {row('amount', t.amount, amount)}
+          <Button
+            label={opening ? t.mpOpening : t.mpButton(amount)}
+            busy={opening}
+            onPress={() => void payAuto()}
+          />
+          {mpError !== null ? <Text style={styles.error}>{mpError}</Text> : null}
+          <Text style={styles.hint}>{t.mpAutoSteps}</Text>
+        </>
+      ) : order.pay_with === 'mercadopago' ? (
         <>
           {row('amount', t.amount, amount, (amountCents / 100).toFixed(2))}
           {link !== null ? (
@@ -113,7 +155,7 @@ export function PayInstructions({
       <View style={styles.pending}>
         <Ionicons name="time-outline" size={16} color={colors.textMuted} />
         <Text style={styles.pendingText}>
-          {t.pending}. {t.pendingHint}
+          {t.pending}. {mpAuto && order.pay_with === 'mercadopago' ? t.mpAutoPending : t.pendingHint}
         </Text>
       </View>
     </View>
@@ -156,6 +198,7 @@ function createStyles(colors: BrandColors) {
     },
     copyText: { color: colors.primary, fontSize: typography.caption.fontSize, fontWeight: '800' },
     note: { color: colors.text, fontSize: typography.label.fontSize },
+    error: { color: colors.danger, fontSize: typography.label.fontSize, fontWeight: '600' },
     hint: { color: colors.textMuted, fontSize: typography.label.fontSize, lineHeight: 19 },
     pending: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     pendingText: { flex: 1, color: colors.textMuted, fontSize: typography.caption.fontSize, fontWeight: '600' },

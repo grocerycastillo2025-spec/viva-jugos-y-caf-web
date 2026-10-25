@@ -88,7 +88,20 @@ teléfono, como una pantalla más).
     liga de cobro del negocio (link.mercadopago.com.mx / mpago.la): el
     cliente ve en su pedido el monto y un botón que abre la liga. Los
     pedidos de transferencia y Mercado Pago quedan *Pago por confirmar*
-    hasta que el cajero toca **Pago recibido** en Pedidos. Stripe, Clip y el
+    hasta que el cajero toca **Pago recibido** en Pedidos.
+  - **Mercado Pago automático** (`0028_mercadopago_auto.sql`, funciones
+    `mp-pago` y `mp-webhook`): con la cuenta conectada, el cliente toca
+    *Pagar* en su pedido y se abre Checkout Pro con el **total exacto** del
+    pedido (leído de la base). Mercado Pago avisa a `mp-webhook`, que
+    consulta el pago a la API con el token del negocio y, si está aprobado,
+    es en MXN, apunta a ese pedido y cubre el monto, lo marca pagado solo.
+    Una devolución lo desmarca. Para activarlo:
+    1. Secreto `MP_ACCESS_TOKEN` en Supabase → Edge Functions → Secrets
+       (el de prueba `TEST-…`/de prueba primero; luego el de producción).
+    2. Secreto `SUPABASE_ACCESS_TOKEN` en GitHub y correr el workflow
+       *Funciones de Mercado Pago* (publica las dos funciones).
+    3. Panel → Negocio → Formas de pago → **Probar conexión** y prender
+       *Aceptar Mercado Pago*. Stripe, Clip y el
     cobro automático de Mercado Pago (Checkout Pro + webhook) siguen
     pendientes de conectar la cuenta.
   - Equipo (`0025_equipo.sql`): el dueño da acceso de **Dueño** o **Cajero**

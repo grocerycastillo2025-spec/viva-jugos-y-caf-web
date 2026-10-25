@@ -265,11 +265,23 @@ export const adminStrings = {
     transferNotePlaceholder: 'Ej. También aceptamos depósito en OXXO a la tarjeta…',
     mpTitle: 'Mercado Pago',
     mpToggle: 'Aceptar Mercado Pago',
-    mpLink: 'Tu liga de cobro de Mercado Pago',
-    mpLinkPlaceholder: 'https://link.mercadopago.com.mx/…',
+    mpAutoTitle: 'Cobro automático',
+    mpAutoOn: (account: string): string => `Conectado${account === '' ? '' : ` (${account})`}: cada cliente paga el total exacto de su pedido y se marca pagado solo.`,
+    mpAutoTest: 'Conectado en modo PRUEBA: los pagos son ficticios. Cambia al Access Token de producción para cobrar de verdad.',
+    mpAutoOff: 'Sin conectar. Guarda tu Access Token de Mercado Pago en Supabase (Edge Functions → Secrets → MP_ACCESS_TOKEN) y toca "Probar conexión".',
+    mpCheck: 'Probar conexión',
+    mpChecking: 'Probando…',
+    mpReasons: {
+      falta_token: 'Supabase todavía no tiene el secreto MP_ACCESS_TOKEN.',
+      token_rechazado: 'Mercado Pago rechazó el token. Revisa que lo copiaste completo.',
+      mercadopago_inalcanzable: 'No se pudo hablar con Mercado Pago. Intenta en un momento.',
+    } as Record<string, string>,
+    mpCheckFailed: 'No se pudo probar. ¿Ya están publicadas las funciones de Mercado Pago en Supabase?',
+    mpLink: 'Liga fija (opcional)',
+    mpLinkPlaceholder: 'https://mpago.mx/…',
     mpHelp:
-      'En la app de Mercado Pago: Cobrar → Link de pago. Ojo: cada liga lleva un monto fijo, así que solo ' +
-      'sirve si cobras siempre lo mismo. Para cobrar el total exacto de cada pedido usaremos el cobro automático.',
+      'Solo si no conectas el cobro automático. Ojo: una liga de Mercado Pago lleva un monto fijo, ' +
+      'así que solo sirve si cobras siempre lo mismo.',
     mpNoAccount: '¿Aún no tienes cuenta? Créala gratis en mercadopago.com.mx; mientras, deja esto apagado.',
     problems: {
       clabe_invalid: 'La CLABE no es válida. Revisa los 18 dígitos.',

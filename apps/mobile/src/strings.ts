@@ -394,6 +394,15 @@ export const strings = {
     mpButton: (amount: string): string => `Pagar ${amount} con Mercado Pago`,
     mpSteps: (amount: string, orderNumber: string): string =>
       `Se abre Mercado Pago. Paga ${amount} y en la nota escribe "Pedido ${orderNumber}". Enseña el comprobante al recoger.`,
+    mpAutoSteps: 'Se abre Mercado Pago con el total de tu pedido. Al terminar de pagar, tu pedido se marca como pagado solo.',
+    mpAutoPending: 'Si ya pagaste, en unos segundos se marca como pagado.',
+    mpOpening: 'Abriendo Mercado Pago…',
+    mpErrors: {
+      ya_pagado: 'Este pedido ya está pagado.',
+      pedido_cerrado: 'Este pedido ya se cerró.',
+      mercadopago_no_conectado: 'Mercado Pago no está disponible ahora. Paga en el mostrador.',
+    } as Record<string, string>,
+    mpFailed: 'No se pudo abrir Mercado Pago. Intenta de nuevo o paga en el mostrador.',
     pending: 'Pago por confirmar',
     pendingHint: 'El negocio lo marca en cuanto vea tu pago.',
     confirmed: 'Pago recibido',

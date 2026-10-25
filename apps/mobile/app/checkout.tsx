@@ -41,6 +41,7 @@ import type { BrandColors } from '../src/domain/branding';
 import { cartItemCount, cartSubtotalCents } from '../src/domain/cart';
 import { formatMoney } from '../src/domain/money';
 import { makeIdempotencyKey } from '../src/domain/order';
+import { isMercadoPagoConnected } from '../src/api/mercadopago';
 import { customerMethods, type CustomerMethod } from '../src/domain/payment-options';
 import {
   buildPickupDays,
@@ -159,7 +160,20 @@ export default function CheckoutScreen(): ReactNode {
   const effectiveSlot = useAsap && asapAvailable ? asapSlot : selected;
 
   // Formas de pago que el dueño tiene prendidas y listas (0024, 0026).
-  const methods = useMemo(() => customerMethods(selectedStore as never), [selectedStore]);
+  // Mercado Pago automático: la cuenta conectada se lee aparte (0028).
+  const [mpConnected, setMpConnected] = useState(false);
+  useEffect(() => {
+    if (selectedStoreId === null) return;
+    let alive = true;
+    void isMercadoPagoConnected(selectedStoreId).then((value) => alive && setMpConnected(value));
+    return () => {
+      alive = false;
+    };
+  }, [selectedStoreId]);
+  const methods = useMemo(
+    () => customerMethods(selectedStore === null ? null : { ...(selectedStore as object), mercadopago_connected: mpConnected } as never),
+    [selectedStore, mpConnected],
+  );
   const [payWith, setPayWith] = useState<CustomerMethod | null>(null);
   const chosenPayWith = payWith !== null && methods.includes(payWith) ? payWith : (methods[0] ?? null);
 

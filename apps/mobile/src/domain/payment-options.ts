@@ -45,6 +45,8 @@ export interface PaymentSetup {
   readonly transfer_info?: string | null;
   readonly transfer_clabe?: string | null;
   readonly mercadopago_link?: string | null;
+  /** Cuenta de Mercado Pago conectada (cobro automático, 0028). */
+  readonly mercadopago_connected?: boolean;
 }
 
 /**
@@ -59,7 +61,7 @@ export function customerMethods(store: PaymentSetup | null | undefined): Custome
   return CUSTOMER_METHODS.filter((m) => {
     if (options[m] !== true) return false;
     if (m === 'transfer') return nonEmpty(store?.transfer_clabe) || nonEmpty(store?.transfer_info);
-    if (m === 'mercadopago') return nonEmpty(store?.mercadopago_link);
+    if (m === 'mercadopago') return store?.mercadopago_connected === true || nonEmpty(store?.mercadopago_link);
     return true;
   });
 }
@@ -110,6 +112,8 @@ export function paymentSetupProblems(input: {
   readonly clabe: string;
   readonly transferInfo: string;
   readonly mpLink: string;
+  /** Con la cuenta conectada no hace falta liga fija. */
+  readonly mpConnected?: boolean;
 }): PaymentSetupProblem[] {
   const problems: PaymentSetupProblem[] = [];
   const clabe = normalizeClabe(input.clabe);
@@ -119,7 +123,7 @@ export function paymentSetupProblems(input: {
   }
   const link = input.mpLink.trim();
   if (link !== '' && !isMercadoPagoLink(link)) problems.push('mp_link_invalid');
-  if (input.options.mercadopago === true && link === '') problems.push('mp_without_link');
+  if (input.options.mercadopago === true && link === '' && input.mpConnected !== true) problems.push('mp_without_link');
   if (!CUSTOMER_METHODS.some((m) => input.options[m] === true)) problems.push('none_on');
   return problems;
 }

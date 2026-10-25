@@ -66,3 +66,12 @@ verify_jwt = false
 # sale usuario, no hay pedido. Ver supabase/functions/checkout/auth.ts.
 [functions.checkout]
 verify_jwt = false
+
+# Mercado Pago (0028). `mp-pago` identifica al usuario con su token igual
+# que `checkout`; `mp-webhook` lo llama Mercado Pago, sin sesión, y no se
+# fía del aviso: consulta el pago a la API con nuestro token.
+[functions.mp-pago]
+verify_jwt = false
+
+[functions.mp-webhook]
+verify_jwt = false

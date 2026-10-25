@@ -1,0 +1,67 @@
+name: Funciones de Mercado Pago (Supabase)
+
+# Publica en Supabase las Edge Functions del cobro con Mercado Pago:
+#   mp-pago     crea la liga de pago con el monto exacto de cada pedido
+#   mp-webhook  recibe el aviso de Mercado Pago y marca el pedido pagado
+#
+# Se lanza a mano (Actions -> "Funciones de Mercado Pago" -> Run workflow)
+# y cada vez que cambian esas funciones en main.
+#
+# Secreto necesario en GitHub (Settings -> Secrets and variables -> Actions):
+#   SUPABASE_ACCESS_TOKEN   Supabase -> Account -> Access Tokens -> Generate
+#
+# El Access Token de MERCADO PAGO NO va aquí: va en Supabase ->
+# Edge Functions -> Secrets, con el nombre MP_ACCESS_TOKEN.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/functions/mp-pago/**'
+      - 'supabase/functions/mp-webhook/**'
+      - 'supabase/functions/_shared/mercadopago.ts'
+      - 'supabase/functions/checkout/auth.ts'
+
+concurrency:
+  group: supabase-functions
+  cancel-in-progress: false
+
+env:
+  PROJECT_REF: mcvitjvsrmkgdqljbwhd
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Comprobar el secreto
+        id: secreto
+        env:
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::warning::Falta el secreto SUPABASE_ACCESS_TOKEN. Las funciones no se publicaron (Supabase -> Account -> Access Tokens)."
+            echo "listo=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "listo=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: pnpm/action-setup@v6
+        if: steps.secreto.outputs.listo == 'true'
+      - uses: actions/setup-node@v7
+        if: steps.secreto.outputs.listo == 'true'
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+        if: steps.secreto.outputs.listo == 'true'
+
+      - name: Publicar mp-pago y mp-webhook
+        if: steps.secreto.outputs.listo == 'true'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          pnpm supabase functions deploy mp-pago --project-ref "$PROJECT_REF" --no-verify-jwt
+          pnpm supabase functions deploy mp-webhook --project-ref "$PROJECT_REF" --no-verify-jwt

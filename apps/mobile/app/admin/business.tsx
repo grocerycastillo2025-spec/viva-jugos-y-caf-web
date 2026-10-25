@@ -49,6 +49,7 @@ import {
   normalizeClabe,
   paymentSetupProblems,
 } from '../../src/domain/payment-options';
+import { checkMercadoPago } from '../../src/api/mercadopago';
 import { useAsync } from '../../src/hooks/use-async';
 import { strings } from '../../src/strings';
 import { useBranding, useColors } from '../../src/state/branding-context';
@@ -446,6 +447,7 @@ function createStyles(colors: BrandColors) {
     roleChipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
     roleChipText: { color: colors.text, fontWeight: '700', fontSize: typography.label.fontSize },
     roleChipTextOn: { color: colors.onPrimary },
+    mpCheck: { alignSelf: 'flex-start', minHeight: 40 },
     paySection: {
       gap: spacing.sm,
       paddingTop: spacing.md,
@@ -482,13 +484,34 @@ function PaymentsCard({
   const [mpLink, setMpLink] = useState(store.mercadopago_link ?? '');
   const { saving, notice, run } = useSaver();
   const [problems, setProblems] = useState<string[]>([]);
+  const [mp, setMp] = useState<{ connected: boolean; test?: boolean; account?: string | null; message?: string | null }>(
+    () => ({ connected: connected.has('mercadopago') }),
+  );
+  const [checking, setChecking] = useState(false);
+  const probar = async (): Promise<void> => {
+    setChecking(true);
+    try {
+      const status = await checkMercadoPago(store.id);
+      setMp({
+        connected: status.connected,
+        test: status.test === true,
+        account: status.account ?? null,
+        message: status.connected ? null : (p.mpReasons[status.reason ?? ''] ?? p.mpCheckFailed),
+      });
+    } catch (cause) {
+      const reason = cause instanceof Error ? cause.message : '';
+      setMp((m) => ({ ...m, message: p.mpReasons[reason] ?? p.mpCheckFailed }));
+    } finally {
+      setChecking(false);
+    }
+  };
 
   const toggle = (key: string) => (value: boolean): void => setOptions((o) => ({ ...o, [key]: value }));
   const clabeError = normalizeClabe(clabe) !== '' && !clabeValid(clabe) ? (p.problems.clabe_invalid ?? null) : null;
   const mpError = mpLink.trim() !== '' && !isMercadoPagoLink(mpLink) ? (p.problems.mp_link_invalid ?? null) : null;
 
   const save = (): void => {
-    const found = paymentSetupProblems({ options, clabe, transferInfo, mpLink });
+    const found = paymentSetupProblems({ options, clabe, transferInfo, mpLink, mpConnected: mp.connected });
     setProblems(found);
     if (found.length > 0) return;
     void run(async () => {
@@ -539,6 +562,18 @@ function PaymentsCard({
 
       <View style={styles.paySection}>
         <Toggle label={p.mpToggle} value={options.mercadopago === true} onValueChange={toggle('mercadopago')} />
+        <Text style={styles.label}>{p.mpAutoTitle}</Text>
+        <Notice
+          tone={mp.connected ? 'ok' : 'error'}
+          text={mp.connected ? (mp.test === true ? p.mpAutoTest : p.mpAutoOn(mp.account ?? '')) : (mp.message ?? p.mpAutoOff)}
+        />
+        <Button
+          label={checking ? p.mpChecking : p.mpCheck}
+          variant="outline"
+          busy={checking}
+          onPress={() => void probar()}
+          style={styles.mpCheck}
+        />
         <Field
           label={p.mpLink}
           value={mpLink}
