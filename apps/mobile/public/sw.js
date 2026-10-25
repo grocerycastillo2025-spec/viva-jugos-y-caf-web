@@ -11,7 +11,7 @@
  * los precios y los pedidos siempre se leen en vivo.
  */
 
-const VERSION = 'viva-web-v1';
+const VERSION = 'viva-web-v2';
 const SCOPE = new URL(self.registration.scope).pathname;
 const SHELL = SCOPE; // index.html
 

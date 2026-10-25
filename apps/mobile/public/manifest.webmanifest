@@ -1,7 +1,7 @@
 {
   "name": "VIVA Jugos y Café",
   "short_name": "VIVA",
-  "description": "Pide jugos naturales, licuados, bowls y café en VIVA Jugos y Café.",
+  "description": "Pide jugos naturales, licuados y café en VIVA Jugos y Café.",
   "lang": "es-MX",
   "start_url": "__BASE__",
   "scope": "__BASE__",
@@ -11,19 +11,19 @@
   "theme_color": "#C9480F",
   "icons": [
     {
-      "src": "__BASE__icons/icon-192.png",
+      "src": "__BASE__icons/icon-192.png?v=2",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "__BASE__icons/icon-512.png",
+      "src": "__BASE__icons/icon-512.png?v=2",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "__BASE__icons/maskable-512.png",
+      "src": "__BASE__icons/maskable-512.png?v=2",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
