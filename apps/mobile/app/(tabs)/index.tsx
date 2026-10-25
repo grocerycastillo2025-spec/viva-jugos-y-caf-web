@@ -21,7 +21,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { fetchFeaturedItems, fetchItemsRequiringChoice } from '../../src/api/menu';
@@ -41,7 +41,7 @@ import { useAsync } from '../../src/hooks/use-async';
 import { useContentWidth } from '../../src/hooks/use-content-width';
 import { needsChoice, useQuickAdd } from '../../src/hooks/use-quick-add';
 import { useBranding } from '../../src/state/branding-context';
-import { loadStories, takeAutoOpen } from '../../src/state/stories-cache';
+import { autoOpenDecided, loadStories, takeAutoOpen } from '../../src/state/stories-cache';
 import { useStores } from '../../src/state/store-context';
 import { gridColumns, radius, spacing, type as typography } from '../../src/theme';
 import { strings } from '../../src/strings';
@@ -80,14 +80,37 @@ export default function HomeScreen(): ReactNode {
 
   // Al abrir la app, las historias salen solas (como en Instagram): una
   // vez por visita, empezando por las nuevas. Ver `autoOpenStart`.
+  //
+  // Mientras se decide, Inicio sigue con "Cargando": si se pintara y
+  // enseguida lo tapara el visor negro, se veria un parpadeo. Si las
+  // historias tardan mas de 3 s, se ensena Inicio igual.
+  const [covering, setCovering] = useState(() => !autoOpenDecided());
   useEffect(() => {
-    if (stories == null || stories.length === 0) return;
+    if (!covering) return undefined;
+    const timer = setTimeout(() => setCovering(false), 3000);
+    return () => clearTimeout(timer);
+  }, [covering]);
+  useEffect(() => {
+    if (stories == null) return undefined;
+    if (stories.length === 0) {
+      setCovering(false);
+      return undefined;
+    }
     let alive = true;
+    let reveal: ReturnType<typeof setTimeout> | undefined;
     void takeAutoOpen(stories).then((id) => {
-      if (alive && id !== null) router.push({ pathname: '/historias', params: { id } });
+      if (!alive) return;
+      if (id === null) {
+        setCovering(false);
+        return;
+      }
+      router.push({ pathname: '/historias', params: { id } });
+      // Inicio aparece ya debajo del visor, sin verse.
+      reveal = setTimeout(() => setCovering(false), 600);
     });
     return () => {
       alive = false;
+      if (reveal !== undefined) clearTimeout(reveal);
     };
   }, [router, stories]);
 
@@ -124,7 +147,7 @@ export default function HomeScreen(): ReactNode {
 
   // El fallo de sucursales manda: sin sucursal no hay nada que ensenar.
   const activeError = storesError ?? error;
-  const activeLoading = storesLoading || loading;
+  const activeLoading = storesLoading || loading || covering;
 
   if (activeError !== null || activeLoading || selectedStore === null) {
     return (

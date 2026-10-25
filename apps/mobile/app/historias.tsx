@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Animated, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { trackEvent } from '../src/analytics/track';
@@ -24,7 +24,20 @@ import { useBranding } from '../src/state/branding-context';
 import { markStorySeen, useSeenStories } from '../src/state/seen-stories';
 import { strings } from '../src/strings';
 
+/** Entra con un fundido corto: sin el, el negro aparece de golpe. */
 export default function StoriesViewer(): ReactNode {
+  const fade = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(fade, { toValue: 1, duration: 220, useNativeDriver: Platform.OS !== 'web' }).start();
+  }, [fade]);
+  return (
+    <Animated.View style={{ flex: 1, opacity: fade, backgroundColor: '#000' }}>
+      <StoriesViewerContent />
+    </Animated.View>
+  );
+}
+
+function StoriesViewerContent(): ReactNode {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();

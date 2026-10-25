@@ -35,6 +35,11 @@ export function preloadStory(story: StoryRow | undefined): void {
 
 let autoOpenedThisSession = false;
 
+/** Ya se decidió en esta visita si las historias salen solas. */
+export function autoOpenDecided(): boolean {
+  return autoOpenedThisSession;
+}
+
 /** Id de la historia con la que abrir el visor solo, o null. Una vez por visita. */
 export async function takeAutoOpen(stories: readonly StoryRow[]): Promise<string | null> {
   if (autoOpenedThisSession) return null;

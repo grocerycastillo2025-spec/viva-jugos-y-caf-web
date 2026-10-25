@@ -23,7 +23,7 @@ function tabIcon(name: IconName, focused: IconName) {
 }
 
 export default function TabsLayout(): ReactNode {
-  const { colors, features } = useBranding();
+  const { colors, features, loading } = useBranding();
 
   return (
     <Tabs
@@ -65,7 +65,9 @@ export default function TabsLayout(): ReactNode {
           // tampoco se llega a ella por enlace directo. Se aplica con un
           // spread porque `exactOptionalPropertyTypes` no admite
           // `href: undefined` como forma de "no pasar la prop".
-          ...(features.loyalty ? {} : { href: null }),
+          // Mientras carga la marca no se ensena: si luego resulta apagada,
+          // la barra no salta de 5 a 4 pestanas al abrir.
+          ...(features.loyalty && !loading ? {} : { href: null }),
         }}
       />
       <Tabs.Screen
