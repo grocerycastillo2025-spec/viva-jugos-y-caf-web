@@ -1,0 +1,17 @@
+{
+  "name": "Viva Juice and Coffee",
+  "short_name": "Viva",
+  "description": "Order fresh juices, smoothies and coffee from Viva Juice and Coffee.",
+  "lang": "en",
+  "start_url": "__BASE__",
+  "scope": "__BASE__",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0E4A2B",
+  "theme_color": "#0E4A2B",
+  "icons": [
+    { "src": "__BASE__icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "__BASE__icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "__BASE__icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

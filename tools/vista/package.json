@@ -1,0 +1,8 @@
+{
+  "name": "vista",
+  "private": true,
+  "type": "module",
+  "description": "Banco de pruebas visual del menu. Fuera del workspace de pnpm a proposito: sus dependencias no tienen que entrar en las de la app.",
+  "scripts": { "ver": "node build.mjs && node tira.mjs" },
+  "devDependencies": { "esbuild": "^0.28.2", "playwright-core": "^1.56.0" }
+}

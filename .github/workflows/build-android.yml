@@ -1,0 +1,389 @@
+name: Build Android (EAS)
+
+# Se dispara a mano desde la pestana Actions. No corre en cada push:
+# cada build consume cuota de EAS y tarda entre 10 y 20 minutos.
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'Perfil de eas.json'
+        type: choice
+        options:
+          - preview
+          - production
+        default: preview
+      sin_push:
+        description: 'Construir aunque no haya configuracion de Firebase (el APK no recibira notificaciones)'
+        type: boolean
+        default: false
+
+concurrency:
+  group: eas-android
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: APK en EAS
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Comprobar que los secretos existen
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+        run: |
+          missing=""
+          [ -z "$EXPO_TOKEN" ]   && missing="$missing EXPO_TOKEN"
+          [ -z "$SUPABASE_URL" ] && missing="$missing EXPO_PUBLIC_SUPABASE_URL"
+          [ -z "$SUPABASE_KEY" ] && missing="$missing EXPO_PUBLIC_SUPABASE_ANON_KEY"
+          if [ -n "$missing" ]; then
+            echo "::error::Faltan secretos del repositorio:$missing"
+            echo "Se crean en Settings -> Secrets and variables -> Actions -> New repository secret"
+            exit 1
+          fi
+          # La app rechaza al arrancar una clave secreta; mejor detectarlo
+          # aqui que descubrirlo con el APK ya instalado.
+          case "$SUPABASE_KEY" in
+            sb_secret_*)
+              echo "::error::EXPO_PUBLIC_SUPABASE_ANON_KEY contiene una clave SECRETA. Usa la publicable."
+              exit 1
+              ;;
+          esac
+          echo "Secretos presentes."
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Un build de EAS cuesta cuota y 15 minutos: no lo gastamos en algo
+      # que ya sabemos que esta roto.
+      - name: Lint, typecheck y tests
+        run: |
+          pnpm lint
+          pnpm typecheck
+          pnpm test
+
+      - name: Instalar eas-cli
+        run: npm install -g eas-cli@latest
+
+      # EAS Build compila en los servidores de Expo, asi que las variables
+      # del runner NO viajan solas: hay que declararlas en el perfil de
+      # eas.json. Se inyectan aqui, en el checkout efimero, para que los
+      # valores nunca queden versionados.
+      - name: Inyectar configuracion publica en el perfil
+        working-directory: apps/mobile
+        env:
+          PROFILE: ${{ inputs.profile }}
+          SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+          RESTAURANT_ID: ${{ secrets.EXPO_PUBLIC_RESTAURANT_ID }}
+        run: |
+          # La MARCA se fija en el build (§19: una app por marca). Manda el
+          # secreto; si no esta, se usa el valor por defecto de app.json.
+          # En ningun caso se adivina: el id efectivo se imprime abajo.
+          brand="$RESTAURANT_ID"
+          if [ -z "$brand" ]; then
+            brand=$(jq -r '.expo.extra.restaurantId // empty' app.json)
+            echo "::warning::Sin secreto EXPO_PUBLIC_RESTAURANT_ID; se usa el de app.json."
+          fi
+          if [ -z "$brand" ]; then
+            echo "::error::No hay marca: ni el secreto EXPO_PUBLIC_RESTAURANT_ID ni app.json la traen."
+            exit 1
+          fi
+
+          jq --arg p "$PROFILE" --arg url "$SUPABASE_URL" --arg key "$SUPABASE_KEY" --arg brand "$brand" '
+            .build[$p].env.EXPO_PUBLIC_SUPABASE_URL = $url
+            | .build[$p].env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY = $key
+            | .build[$p].env.EXPO_PUBLIC_RESTAURANT_ID = $brand
+          ' eas.json > eas.json.tmp && mv eas.json.tmp eas.json
+
+          # De la marca se imprime el VALOR (es un uuid publico y saber que
+          # marca se compilo importa); de lo demas, solo los nombres.
+          echo "Marca de esta build: $brand"
+          echo "Variables inyectadas en el perfil $PROFILE:"
+          jq -r --arg p "$PROFILE" '.build[$p].env | keys[]' eas.json
+
+      # El projectId esta fijado en app.json a proposito. NO se llama a
+      # `eas init`: si algun dia no resolviera bien, crearia un proyecto
+      # nuevo y se perderia la asociacion con el keystore de firma, que
+      # vive en el proyecto de EAS. Antes reventar que firmar con otra
+      # clave: una app firmada con un keystore distinto no se puede
+      # actualizar sobre la instalada.
+      # Firebase para las notificaciones.
+      #
+      # El archivo NO viaja por el repositorio: EAS solo sube al builder lo
+      # que esta en git, y este esta en .gitignore a proposito. Viaja como
+      # variable de entorno de EAS de tipo `file`.
+      #
+      # Y ADEMAS SE BAJA AQUI, PARA MIRARLO ANTES DE GASTAR UN BUILD.
+      #
+      # Antes era obligatorio por otra razon: con la politica `fingerprint`
+      # el numero se calculaba en las DOS maquinas y tenia que coincidir, y
+      # como `app.config.js` declara `googleServicesFile` solo si encuentra
+      # el archivo, tenerlo en el builder y no aqui descuadraba el calculo.
+      # Esa razon ya no existe: el `runtimeVersion` es un literal de
+      # `app.json` y no se calcula nada (docs/RUNTIME-Y-UPDATES.md).
+      #
+      # Se conserva porque hace de revision previa: comprueba que el JSON
+      # es valido y que el `package_name` es el de esta app. Un build son
+      # veinte minutos y uno de los quince del mes; descubrir en el minuto
+      # dieciocho que el archivo era el de otro proyecto sale caro.
+      #
+      # `eas env:pull` lo deja en .eas/.env/GOOGLE_SERVICES_JSON y una
+      # linea en .env.local apuntando a el, que es lo que lee la
+      # configuracion.
+      #
+      # La visibilidad sigue teniendo que ser `Sensitive`: EAS no deja leer
+      # las `Secret` ni al CLI, asi que con `Secret` esta revision no se
+      # puede hacer y el paso para el build.
+      #
+      # OJO tambien con un mensaje enganoso del log de `eas build`:
+      #   "No environment variables with visibility Plain text and
+      #    Sensitive found for the <env> environment on EAS."
+      # Eso NO significa que falte la variable. Al evaluar la configuracion,
+      # el CLI pide las variables sin el contenido de los ficheros y
+      # descarta las que no traen valor, asi que una de tipo `file`
+      # desaparece siempre de esa lista aunque exista y sea Sensitive. Esta
+      # leido en evaluateConfigWithEnvVarsAsync.js del propio eas-cli.
+      - name: Traer la configuracion de Firebase desde EAS
+        working-directory: apps/mobile
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EAS_ENV: ${{ inputs.profile }}
+          SIN_PUSH: ${{ inputs.sin_push }}
+        run: |
+          rm -f .env.local
+          if ! eas env:pull --environment "$EAS_ENV" --non-interactive > env-pull.txt 2>&1; then
+            echo "::warning::No se pudieron traer las variables de EAS."
+            cat env-pull.txt || true
+          fi
+          rm -f env-pull.txt
+
+          if [ -s ".eas/.env/GOOGLE_SERVICES_JSON" ]; then
+            if ! jq -e . ".eas/.env/GOOGLE_SERVICES_JSON" >/dev/null 2>&1; then
+              echo "::error::El GOOGLE_SERVICES_JSON de EAS no es un JSON valido."
+              echo "Vuelve a subirlo en expo.dev: tiene que ser el archivo entero de Firebase."
+              exit 1
+            fi
+            want=$(jq -r '.expo.android.package' app.json)
+            if ! jq -e --arg p "$want" '.client[] | select(.client_info.android_client_info.package_name == $p)' ".eas/.env/GOOGLE_SERVICES_JSON" >/dev/null; then
+              echo "::error::El google-services.json de EAS no contiene el paquete $want."
+              echo "En Firebase hay que anadir una app Android con ese nombre de paquete exacto."
+              exit 1
+            fi
+            echo "google-services.json descargado y verificado para $want."
+            exit 0
+          fi
+
+          # No bajo. Las dos razones posibles tienen salidas distintas.
+          if eas env:list --environment "$EAS_ENV" --format long 2>/dev/null | grep -q 'GOOGLE_SERVICES_JSON'; then
+            # Existe pero no se puede leer: es `Secret`. `sin_push` tampoco
+            # sirve aqui: no es que falte el archivo, es que lo hay y no se
+            # deja mirar, y eso se arregla en expo.dev en diez segundos.
+            echo "::error::GOOGLE_SERVICES_JSON existe en el entorno '$EAS_ENV' pero no se puede leer: su visibilidad es Secret."
+            echo "Asi no se puede revisar antes de compilar, y un build cuesta uno de los quince"
+            echo "del mes. Prefiero pararlo aqui a descubrir en el minuto dieciocho que el archivo"
+            echo "no era el de esta app."
+            echo "En expo.dev, cambia su Visibility de Secret a Sensitive. El archivo viaja dentro"
+            echo "del APK de todas formas, asi que Secret no protege nada que no este ya publicado."
+            exit 1
+          fi
+
+          if [ "$SIN_PUSH" = "true" ]; then
+            echo "::warning::Sin GOOGLE_SERVICES_JSON en el entorno '$EAS_ENV', y se pidio construir igual: este APK no recibira notificaciones push."
+            exit 0
+          fi
+
+          echo "::error::Sin GOOGLE_SERVICES_JSON en el entorno '$EAS_ENV' de EAS: este APK no podria recibir notificaciones."
+          echo "Se sube en expo.dev, en el proyecto, seccion Environment variables:"
+          echo "  Name         GOOGLE_SERVICES_JSON"
+          echo "  Type         File   (se sube el archivo de Firebase)"
+          echo "  Visibility   Sensitive   (Secret no vale, ver arriba)"
+          echo "  Environments preview y production"
+          echo "Los pasos completos estan en docs/NOTIFICACIONES.md."
+          echo "Si quieres el APK sin notificaciones, relanza marcando la casilla 'sin_push'."
+          exit 1
+
+      - name: Comprobar el projectId de EAS
+        working-directory: apps/mobile
+        run: |
+          project_id=$(jq -r '.expo.extra.eas.projectId // empty' app.json)
+          if [ -z "$project_id" ]; then
+            echo "::error::Falta expo.extra.eas.projectId en apps/mobile/app.json."
+            echo "Se obtiene con 'npx eas-cli init' y se versiona. Sin el, EAS crearia"
+            echo "un proyecto nuevo y la app se firmaria con otro keystore."
+            exit 1
+          fi
+          echo "Proyecto de EAS: $project_id"
+
+      - name: Lanzar el build
+        id: build
+        working-directory: apps/mobile
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          PROFILE: ${{ inputs.profile }}
+        run: |
+          set +e
+          eas build \
+            --platform android \
+            --profile "$PROFILE" \
+            --non-interactive \
+            --wait \
+            --json > build.json 2> build.err
+          code=$?
+          set -e
+
+          # EAS escribe el log humano en stderr (stdout lo ocupa el --json).
+          # Se le quitan los codigos de color para que se lea en el resumen.
+          sed -r 's/\x1B\[[0-9;]*[a-zA-Z]//g' build.err > build.log || cp build.err build.log
+
+          # El enlace al build en expo.dev sale en el log tanto si va bien
+          # como si va mal, y es donde estan los logs completos de Gradle.
+          build_url=$(grep -ohE 'https://expo\.dev/accounts/[^[:space:]]+/builds/[0-9a-f-]+' build.log build.json 2>/dev/null | head -1 || true)
+          echo "build_url=$build_url" >> "$GITHUB_OUTPUT"
+
+          if [ "$code" -ne 0 ]; then
+            echo "::group::Log de eas build"
+            cat build.log
+            echo "::endgroup::"
+            tail -60 build.log > build.tail
+
+            # El log de arriba es el del CLI, y cuando el fallo ocurre en
+            # el servidor se queda en un "Build failed" sin causa. La causa
+            # la tiene EAS y hay que pedirsela: sin esto hay que entrar a
+            # expo.dev a leerla a mano, que es justo lo que nos dejo
+            # ciegos.
+            build_id=$(printf '%s' "$build_url" | sed -E 's|.*/builds/||')
+            if [ -n "$build_id" ] && eas build:view "$build_id" --json > build-view.json 2>/dev/null; then
+              {
+                echo "### Lo que dice EAS"
+                echo
+                echo "| | |"
+                echo "|---|---|"
+                echo "| Codigo | \`$(jq -r '.error.errorCode // "sin codigo"' build-view.json)\` |"
+                echo "| Estado | \`$(jq -r '.status // "desconocido"' build-view.json)\` |"
+                echo
+                echo '```'
+                jq -r '.error.message // "EAS no devolvio mensaje de error."' build-view.json
+                jq -r 'if .error.docsUrl then "Documentacion: " + .error.docsUrl else empty end' build-view.json
+                echo '```'
+              } > build-eas-error.md
+              echo "::group::Lo que dice EAS"
+              cat build-eas-error.md
+              echo "::endgroup::"
+            else
+              echo "::warning::No se pudo leer el detalle del build en EAS; queda el enlace."
+            fi
+
+            echo "failed=true" >> "$GITHUB_OUTPUT"
+            exit "$code"
+          fi
+
+          # `--json` devuelve un array con un elemento por build.
+          url=$(jq -r '.[0].artifacts.applicationArchiveUrl // .[0].artifacts.buildUrl // empty' build.json)
+          id=$(jq -r '.[0].id // empty' build.json)
+          status=$(jq -r '.[0].status // "unknown"' build.json)
+
+          {
+            echo "apk_url=$url"
+            echo "build_id=$id"
+            echo "build_status=$status"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Resumen del run
+        if: always()
+        working-directory: apps/mobile
+        env:
+          APK_URL: ${{ steps.build.outputs.apk_url }}
+          BUILD_ID: ${{ steps.build.outputs.build_id }}
+          BUILD_STATUS: ${{ steps.build.outputs.build_status }}
+          BUILD_URL: ${{ steps.build.outputs.build_url }}
+          PROFILE: ${{ inputs.profile }}
+        run: |
+          {
+            echo "# Build de Android — perfil \`$PROFILE\`"
+            echo
+
+            if [ -n "$APK_URL" ]; then
+              echo "## Descarga"
+              echo
+              echo "**[Descargar el APK]($APK_URL)**"
+              echo
+              echo "Abre este enlace **desde el navegador del telefono**. Android pedira"
+              echo "permiso para instalar apps de origen desconocido: es normal en una"
+              echo "distribucion interna, no esta firmada por Play Store."
+              echo
+              echo "| | |"
+              echo "|---|---|"
+              echo "| Estado | \`$BUILD_STATUS\` |"
+              echo "| Build ID | \`$BUILD_ID\` |"
+              if [ -n "$BUILD_URL" ]; then
+                echo "| En EAS | [ver el build]($BUILD_URL) |"
+              fi
+              exit 0
+            fi
+
+            # ---- Fallo ----
+            #
+            # Aqui NO se adivina la causa. Antes habia un heuristico que
+            # buscaba "keystore" en el log y anunciaba que faltaba el
+            # keystore; como EAS imprime "Using Keystore from
+            # configuration" en TODOS los builds, cualquier fallo se
+            # anunciaba mal y mandaba a investigar lo que no era.
+            # Se ensena el error de verdad y el enlace, y punto.
+            echo "## El build fallo"
+            echo
+
+            if [ -n "$BUILD_URL" ]; then
+              echo "**[Ver el build en EAS]($BUILD_URL)** — ahi estan los logs completos de Gradle."
+            else
+              echo "El fallo ocurrio antes de crear el build en EAS: la causa esta en el log de abajo."
+            fi
+            echo
+
+            if [ -s build-eas-error.md ]; then
+              cat build-eas-error.md
+              echo
+            fi
+
+            if [ -s build.tail ]; then
+              echo "### Ultimas lineas del log del CLI"
+              echo
+              echo '```'
+              cat build.tail
+              echo '```'
+            elif [ -s build.log ]; then
+              echo "### Log"
+              echo
+              echo '```'
+              tail -60 build.log
+              echo '```'
+            else
+              echo "Sin salida de \`eas build\`. Revisa el log del paso anterior."
+            fi
+
+            echo
+            echo "El log completo y el JSON quedan como artefacto del run durante 7 dias."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Guardar el JSON del build
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: eas-build-metadata
+          path: |
+            apps/mobile/build.json
+            apps/mobile/build.err
+            apps/mobile/build.log
+            apps/mobile/build-view.json
+          if-no-files-found: ignore
+          retention-days: 7

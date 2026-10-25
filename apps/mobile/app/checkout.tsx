@@ -1,0 +1,576 @@
+/**
+ * Checkout: elegir hora de recogida y mandar el pedido.
+ *
+ * REGLAS QUE SE VEN AQUI
+ *  - El pedido nace en `payment_pending` y de aqui se va a la pantalla de
+ *    pago. Nada dice "confirmado" hasta que el cobro se registra.
+ *  - Solo se ensena SUBTOTAL. Impuestos y total los calcula Clover.
+ *  - Hay `idempotency_key` desde ya, aunque el pago sea simulado: es lo
+ *    que impide que un reintento cree un segundo pedido (R10).
+ *  - La hora es una ESTIMACION. No se promete que estara listo.
+ *  - Si la sucursal cobra RECARGO POR TARJETA, aqui se dice cuanto es,
+ *    con su cifra. Nueva Jersey (P.L. 2023, c.146) exige el aviso en la
+ *    pantalla de checkout y exige que lleve el IMPORTE: decir solo que
+ *    existe un recargo es el ejemplo de incumplimiento que da la FAQ de
+ *    la NJ Division of Consumer Affairs. Sale dos veces a proposito, y
+ *    esta explicado abajo, donde se pinta.
+ *
+ * La creacion pasa por el RPC `create_pickup_order`, no por un insert: el
+ * cliente no tiene permiso de escritura sobre `orders`.
+ */
+
+import { Ionicons } from '@expo/vector-icons';
+import * as Crypto from 'expo-crypto';
+import { useRouter } from 'expo-router';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+
+import { createPickupOrder, fetchSlotOccupancy, parseCreateOrderError } from '../src/api/orders';
+import { fetchPickupSetup } from '../src/api/store';
+import { AuthForm } from '../src/components/AuthForm';
+import { DataState } from '../src/components/DataState';
+import { Screen, useScreenInsets } from '../src/components/Screen';
+import { SurchargeNotice } from '../src/components/SurchargeNotice';
+import { Button } from '../src/components/ui';
+import type { BrandColors } from '../src/domain/branding';
+import { cartItemCount, cartSubtotalCents } from '../src/domain/cart';
+import { formatMoney } from '../src/domain/money';
+import { makeIdempotencyKey } from '../src/domain/order';
+import {
+  buildPickupDays,
+  canOrderAsap,
+  daysWithSlots,
+  firstAvailableSlot,
+  validateChosenSlot,
+  type PickupConfig,
+  type PickupDay,
+  type PickupSlot,
+} from '../src/domain/pickup';
+import { useAsync } from '../src/hooks/use-async';
+import { useSurcharge } from '../src/hooks/use-surcharge';
+import { useColors } from '../src/state/branding-context';
+import { useCart } from '../src/state/cart-context';
+import { useSession } from '../src/state/session-context';
+import { useStores } from '../src/state/store-context';
+import { strings } from '../src/strings';
+import { radius, spacing, type as typography } from '../src/theme';
+
+interface Setup {
+  readonly days: readonly PickupDay[];
+  readonly config: PickupConfig | null;
+}
+
+/** Traduce el error del RPC a algo que el cliente entienda. */
+function failureMessage(message: string): string {
+  const { failure, subject } = parseCreateOrderError(message);
+  switch (failure) {
+    case 'slot_full':
+      return strings.checkout.slotTaken;
+    case 'store_closed_at_pickup':
+      return strings.checkout.closedBody;
+    case 'pickup_too_soon':
+    case 'pickup_too_far':
+      return strings.checkout.slotTaken;
+    case 'item_unavailable':
+    case 'modifier_unavailable':
+      return subject === null
+        ? strings.checkout.cartChanged
+        : `${subject}: ${strings.item.unavailableNow}`;
+    case 'item_not_found':
+    case 'modifier_not_for_item':
+      return strings.checkout.cartChanged;
+    case 'empty_cart':
+      return strings.cart.emptyTitle;
+    default:
+      return message;
+  }
+}
+
+export default function CheckoutScreen(): ReactNode {
+  const router = useRouter();
+  const colors = useColors();
+  const insets = useScreenInsets();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
+  const { user, loading: sessionLoading } = useSession();
+  const { selectedStore, selectedStoreId } = useStores();
+  const { cart, isEmpty, clear } = useCart();
+  const surcharge = useSurcharge();
+
+  const [selected, setSelected] = useState<PickupSlot | null>(null);
+  const [useAsap, setUseAsap] = useState(true);
+  const [dayIndex, setDayIndex] = useState(0);
+  const [note, setNote] = useState('');
+  const [placing, setPlacing] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+
+  /**
+   * La clave de idempotencia se genera UNA vez por intento y sobrevive a
+   * los reintentos: si el primer envio se pierde por red, el segundo
+   * devuelve el mismo pedido en vez de crear otro.
+   */
+  const idempotencyKey = useRef<string>(
+    makeIdempotencyKey(Crypto.randomUUID().replaceAll('-', '')),
+  );
+
+  const load = useCallback(async (): Promise<Setup> => {
+    if (selectedStoreId === null || selectedStore === null) return { days: [], config: null };
+
+    const setup = await fetchPickupSetup(selectedStoreId);
+    if (setup.config === null) return { days: [], config: null };
+
+    const now = new Date();
+    const horizon = new Date(now.getTime() + (setup.config.max_days_ahead + 1) * 86400000);
+    const occupancy = await fetchSlotOccupancy(selectedStoreId, now, horizon);
+
+    return {
+      config: setup.config,
+      days: buildPickupDays({
+        hours: setup.hours,
+        closures: setup.closures,
+        config: setup.config,
+        timeZone: selectedStore.timezone,
+        occupancy,
+        now,
+      }),
+    };
+  }, [selectedStore, selectedStoreId]);
+
+  const { data, error, loading, reload } = useAsync(load, [selectedStoreId, user?.id]);
+
+  const openDays = useMemo(() => daysWithSlots(data?.days ?? []), [data]);
+  const asapAvailable = useMemo(
+    () => (data?.config === null || data === null ? false : canOrderAsap(data.days, data.config)),
+    [data],
+  );
+  const asapSlot = useMemo(() => firstAvailableSlot(data?.days ?? []), [data]);
+
+  // Al llegar las franjas se preselecciona la primera libre.
+  useEffect(() => {
+    if (selected === null && asapSlot !== null) setSelected(asapSlot);
+  }, [asapSlot, selected]);
+
+  const effectiveSlot = useAsap && asapAvailable ? asapSlot : selected;
+
+  const place = useCallback(async () => {
+    if (effectiveSlot === null || selectedStoreId === null || data?.config === undefined) return;
+    if (data?.config === null) return;
+
+    // Ultima comprobacion antes del viaje. El servidor lo valida otra vez.
+    const rejection = validateChosenSlot(
+      effectiveSlot.startsAt,
+      data.days,
+      new Date(),
+      data.config,
+    );
+    if (rejection !== null) {
+      setFailure(strings.checkout.slotTaken);
+      reload();
+      return;
+    }
+
+    setPlacing(true);
+    setFailure(null);
+
+    try {
+      const created = await createPickupOrder({
+        storeId: selectedStoreId,
+        idempotencyKey: idempotencyKey.current,
+        pickupAt: effectiveSlot.startsAt,
+        isAsap: useAsap && asapAvailable,
+        customerNote: note,
+        // Solo ids y cantidades: los precios los pone la base.
+        items: cart.lines.map((line) => ({
+          clover_item_id: line.cloverItemId,
+          quantity: line.quantity,
+          note: line.note === '' ? null : line.note,
+          modifiers: line.modifiers.map((modifier) => modifier.cloverModifierId),
+        })),
+      });
+
+      clear();
+      // Al pago, no al seguimiento: el pedido nace en `payment_pending` y
+      // hasta que haya cobro no hay nada que seguir.
+      router.replace({ pathname: '/pay/[id]', params: { id: created.order_id } });
+    } catch (cause) {
+      setFailure(failureMessage(cause instanceof Error ? cause.message : String(cause)));
+      // Las franjas pueden haber cambiado: se recargan para que la
+      // siguiente eleccion parta de datos frescos.
+      reload();
+    } finally {
+      setPlacing(false);
+    }
+  }, [
+    asapAvailable,
+    cart.lines,
+    clear,
+    data,
+    effectiveSlot,
+    note,
+    reload,
+    router,
+    selectedStoreId,
+    useAsap,
+  ]);
+
+  const header = (
+    <View style={styles.header}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={strings.common.back}
+        onPress={() => router.back()}
+        hitSlop={12}
+        style={({ pressed }) => [styles.close, pressed && styles.pressed]}
+      >
+        <Ionicons name="arrow-back" size={22} color={colors.text} />
+      </Pressable>
+      <Text style={styles.title}>{strings.checkout.title}</Text>
+    </View>
+  );
+
+  if (isEmpty) {
+    return (
+      <Screen scroll={false}>
+        {header}
+        <DataState loading={false} error={null} empty emptyTitle={strings.cart.emptyTitle}>
+          {null}
+        </DataState>
+      </Screen>
+    );
+  }
+
+  // Puerta de identificacion: el pedido se guarda en la cuenta.
+  if (!sessionLoading && user === null) {
+    return (
+      <Screen scroll={false}>
+        {header}
+        <ScrollView contentContainerStyle={styles.body}>
+          <AuthForm title={strings.auth.signInToOrder} body={strings.auth.signInToOrderBody} />
+        </ScrollView>
+      </Screen>
+    );
+  }
+
+  if (sessionLoading || loading || error !== null || openDays.length === 0) {
+    return (
+      <Screen scroll={false}>
+        {header}
+        <DataState
+          loading={sessionLoading || loading}
+          error={error}
+          empty={openDays.length === 0}
+          onRetry={reload}
+          emptyTitle={strings.checkout.noSlotsTitle}
+          emptyBody={strings.checkout.noSlotsBody}
+        >
+          {null}
+        </DataState>
+      </Screen>
+    );
+  }
+
+  const activeDay = openDays[Math.min(dayIndex, openDays.length - 1)];
+  const subtotal = cartSubtotalCents(cart);
+
+  return (
+    <Screen scroll={false}>
+      {header}
+
+      <ScrollView contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 190 }]}>
+        {asapAvailable && asapSlot !== null ? (
+          <Pressable
+            accessibilityRole="radio"
+            accessibilityState={{ checked: useAsap }}
+            onPress={() => setUseAsap(true)}
+            style={({ pressed }) => [
+              styles.asap,
+              useAsap && styles.asapOn,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Ionicons
+              name={useAsap ? 'radio-button-on' : 'radio-button-off'}
+              size={22}
+              color={useAsap ? colors.primary : colors.textFaint}
+            />
+            <View style={styles.asapBody}>
+              <Text style={styles.asapTitle}>{strings.checkout.asap}</Text>
+              <Text style={styles.asapHint}>{strings.checkout.asapReady(asapSlot.label)}</Text>
+            </View>
+          </Pressable>
+        ) : null}
+
+        <Pressable
+          accessibilityRole="radio"
+          accessibilityState={{ checked: !useAsap }}
+          onPress={() => setUseAsap(false)}
+          style={({ pressed }) => [
+            styles.asap,
+            !useAsap && styles.asapOn,
+            pressed && styles.pressed,
+          ]}
+        >
+          <Ionicons
+            name={!useAsap ? 'radio-button-on' : 'radio-button-off'}
+            size={22}
+            color={!useAsap ? colors.primary : colors.textFaint}
+          />
+          <View style={styles.asapBody}>
+            <Text style={styles.asapTitle}>{strings.checkout.pickTime}</Text>
+          </View>
+        </Pressable>
+
+        {!useAsap ? (
+          <>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.dayTabs}
+            >
+              {openDays.map((day, index) => {
+                const active = index === Math.min(dayIndex, openDays.length - 1);
+                const label =
+                  day.offsetDays === 0
+                    ? strings.checkout.today
+                    : day.offsetDays === 1
+                      ? strings.checkout.tomorrow
+                      : day.day;
+                return (
+                  <Pressable
+                    key={day.day}
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected: active }}
+                    onPress={() => setDayIndex(index)}
+                    style={({ pressed }) => [
+                      styles.dayTab,
+                      active && styles.dayTabOn,
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <Text style={[styles.dayTabText, active && styles.dayTabTextOn]}>{label}</Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+
+            <View style={styles.slots}>
+              {(activeDay?.slots ?? []).map((slot) => {
+                const active = selected?.startsAt === slot.startsAt;
+                return (
+                  <Pressable
+                    key={slot.startsAt}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active, disabled: slot.isFull }}
+                    disabled={slot.isFull}
+                    onPress={() => setSelected(slot)}
+                    style={({ pressed }) => [
+                      styles.slot,
+                      active && styles.slotOn,
+                      slot.isFull && styles.slotFull,
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <Text style={[styles.slotText, active && styles.slotTextOn]}>{slot.label}</Text>
+                    {slot.isFull ? (
+                      <Text style={styles.slotFullText}>{strings.checkout.full}</Text>
+                    ) : null}
+                  </Pressable>
+                );
+              })}
+            </View>
+          </>
+        ) : null}
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{strings.checkout.noteForStore}</Text>
+          <TextInput
+            value={note}
+            onChangeText={setNote}
+            placeholder={strings.checkout.noteplaceholder}
+            placeholderTextColor={colors.textFaint}
+            style={styles.input}
+            multiline
+            maxLength={240}
+          />
+        </View>
+
+        <View style={styles.summary}>
+          <Text style={styles.sectionTitle}>{strings.checkout.summary}</Text>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>{strings.cart.itemCount(cartItemCount(cart))}</Text>
+            <Text style={styles.summaryValue}>{formatMoney(subtotal)}</Text>
+          </View>
+
+          {/*
+            El aviso del recargo va PEGADO al dinero, antes de la nota de
+            impuestos: las dos cosas dicen "esto no es lo que se cobra",
+            y separarlas dejaria la de verdad importante suelta al final.
+
+            No se ensena una estimacion en dolares. El recargo se aplica
+            sobre el TOTAL, y el total lleva impuestos que esta app no
+            calcula a proposito; una estimacion sobre el subtotal saldria
+            siempre por debajo de lo cobrado, que es justo el error que la
+            ley castiga. El porcentaje ya es divulgacion valida.
+          */}
+          <SurchargeNotice disclosure={surcharge} />
+
+          {/* Solo subtotal: el total lo calcula la caja. */}
+          <Text style={styles.summaryNote}>{strings.checkout.taxNote}</Text>
+        </View>
+
+        {failure !== null ? (
+          <View style={styles.failure}>
+            <Ionicons name="alert-circle" size={20} color={colors.danger} />
+            <Text style={styles.failureText}>{failure}</Text>
+          </View>
+        ) : null}
+      </ScrollView>
+
+      <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.lg }]}>
+        {/*
+          Segunda aparicion, y no es un descuido. El boton vive en un pie
+          FIJO: se puede pulsar "Place order" sin haber bajado nunca hasta
+          el resumen, y entonces el aviso de arriba no se habria visto.
+          Un aviso que el cliente puede no llegar a ver no es "claro y
+          visible". Aqui va en su forma corta, que tambien lleva la cifra.
+        */}
+        <SurchargeNotice disclosure={surcharge} variant="line" style={styles.footerNotice} />
+        {effectiveSlot !== null ? (
+          <Text style={styles.footerSlot}>{strings.order.estimatedFor(effectiveSlot.label)}</Text>
+        ) : null}
+        <Button
+          label={placing ? strings.checkout.placing : strings.checkout.placeOrder}
+          onPress={() => void place()}
+          busy={placing}
+          disabled={effectiveSlot === null}
+        />
+      </View>
+    </Screen>
+  );
+}
+
+function createStyles(colors: BrandColors) {
+  return StyleSheet.create({
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+    },
+    title: { color: colors.text, fontSize: typography.title.fontSize, fontWeight: '800' },
+    close: {
+      width: 36,
+      height: 36,
+      borderRadius: radius.pill,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    pressed: { opacity: 0.7 },
+
+    body: { padding: spacing.lg, gap: spacing.md },
+
+    asap: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+      backgroundColor: colors.surface,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: spacing.lg,
+    },
+    asapOn: { borderColor: colors.primary, borderWidth: 2 },
+    asapBody: { flex: 1, gap: 2 },
+    asapTitle: { color: colors.text, fontSize: typography.body.fontSize, fontWeight: '700' },
+    asapHint: { color: colors.textMuted, fontSize: typography.caption.fontSize },
+
+    dayTabs: { gap: spacing.sm, paddingVertical: spacing.xs },
+    dayTab: {
+      borderRadius: radius.pill,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.sm,
+    },
+    dayTabOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+    dayTabText: { color: colors.textMuted, fontSize: typography.label.fontSize, fontWeight: '600' },
+    dayTabTextOn: { color: colors.onPrimary },
+
+    slots: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+    slot: {
+      minWidth: 92,
+      alignItems: 'center',
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.md,
+    },
+    slotOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+    slotFull: { opacity: 0.4 },
+    slotText: { color: colors.text, fontSize: typography.label.fontSize, fontWeight: '600' },
+    slotTextOn: { color: colors.onPrimary },
+    slotFullText: { color: colors.danger, fontSize: 10, fontWeight: '700', marginTop: 2 },
+
+    section: { gap: spacing.sm, marginTop: spacing.sm },
+    sectionTitle: { color: colors.text, fontSize: typography.section.fontSize, fontWeight: '700' },
+    input: {
+      backgroundColor: colors.surface,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: spacing.md,
+      minHeight: 64,
+      color: colors.text,
+      fontSize: typography.body.fontSize,
+      textAlignVertical: 'top',
+    },
+
+    summary: {
+      backgroundColor: colors.surface,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: spacing.lg,
+      gap: spacing.sm,
+      marginTop: spacing.sm,
+    },
+    summaryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    summaryLabel: { color: colors.textMuted, fontSize: typography.body.fontSize },
+    summaryValue: { color: colors.text, fontSize: typography.title.fontSize, fontWeight: '800' },
+    summaryNote: { color: colors.textFaint, fontSize: typography.caption.fontSize, lineHeight: 18 },
+
+    failure: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: colors.danger,
+      backgroundColor: colors.surface,
+      padding: spacing.md,
+    },
+    failureText: { flex: 1, color: colors.danger, fontSize: typography.label.fontSize },
+
+    footer: {
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.md,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+      backgroundColor: colors.background,
+      gap: spacing.sm,
+    },
+    footerNotice: { justifyContent: 'center' },
+    footerSlot: {
+      color: colors.textMuted,
+      fontSize: typography.label.fontSize,
+      textAlign: 'center',
+    },
+  });
+}

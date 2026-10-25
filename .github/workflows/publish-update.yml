@@ -1,0 +1,289 @@
+name: Publicar update (EAS Update)
+
+# Envia una actualizacion por aire al canal indicado. Solo sirve para
+# cambios de JavaScript y de assets: si el cambio toca codigo nativo (una
+# dependencia nueva, el targetSdk, un plugin de config) hay que recompilar
+# con "Build Android (EAS)".
+#
+# EAS sirve los updates por canal MAS runtimeVersion, y el runtimeVersion
+# es ahora un literal en `app.json` ("1.0.0"). El build y este runner leen
+# la MISMA cadena de un archivo versionado: no hay nada que calcular ni que
+# pueda salir distinto en cada maquina.
+#
+# Antes era `{ policy: 'fingerprint' }` y no funcionaba: los dos lados
+# calculaban el numero del mismo arbol y no coincidian, asi que ningun
+# update llego a ningun telefono durante una semana. Un mecanismo de
+# seguridad que impide TODAS las entregas no da seguridad, da paralisis.
+#
+# Lo que aquel numero protegia lo cubre ahora un test:
+# `src/__tests__/native-lock.test.ts` falla si entra una dependencia o un
+# plugin nativo y nadie subio el runtimeVersion. Se ejecuta unas lineas mas
+# abajo, antes de publicar nada.
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: 'Canal al que publicar'
+        type: choice
+        options:
+          - preview
+          - production
+        default: preview
+      message:
+        description: 'Que cambia en este update'
+        type: string
+        required: true
+
+concurrency:
+  group: eas-update-${{ inputs.channel }}
+  cancel-in-progress: false
+
+jobs:
+  update:
+    name: Publicar en ${{ inputs.channel }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Comprobar que los secretos existen
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+        run: |
+          missing=""
+          [ -z "$EXPO_TOKEN" ]   && missing="$missing EXPO_TOKEN"
+          [ -z "$SUPABASE_URL" ] && missing="$missing EXPO_PUBLIC_SUPABASE_URL"
+          [ -z "$SUPABASE_KEY" ] && missing="$missing EXPO_PUBLIC_SUPABASE_ANON_KEY"
+          if [ -n "$missing" ]; then
+            echo "::error::Faltan secretos del repositorio:$missing"
+            exit 1
+          fi
+          case "$SUPABASE_KEY" in
+            sb_secret_*)
+              echo "::error::EXPO_PUBLIC_SUPABASE_ANON_KEY contiene una clave SECRETA. Usa la publicable."
+              exit 1
+              ;;
+          esac
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Un update llega a telefonos reales sin pasar por revision de nadie:
+      # las comprobaciones no son opcionales.
+      - name: Lint, typecheck y tests
+        run: |
+          pnpm lint
+          pnpm typecheck
+          pnpm test
+
+      - name: Instalar eas-cli
+        run: npm install -g eas-cli@latest
+
+      # AQUI NO HACE FALTA EL google-services.json
+      #
+      # Lo hubo, y con razon: con la politica `fingerprint`, publicar sin
+      # ese archivo daba un numero distinto al del APK y el update no lo
+      # recogia nadie. Con el runtime literal el archivo ya no entra en
+      # ningun calculo, y un update solo lleva JavaScript y assets: la
+      # configuracion de Firebase vive en el APK, no en el bundle.
+      #
+      # Se quita en vez de dejarlo por si acaso, porque era un paso que
+      # podia hacer fallar la publicacion por algo que ya no la afecta.
+      # Donde si sigue siendo imprescindible es en "Build Android (EAS)".
+
+      # A diferencia del build, aqui el bundle se genera en ESTE runner, asi
+      # que las variables si tienen que estar en el entorno del proceso.
+      - name: Publicar
+        id: update
+        working-directory: apps/mobile
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+          EXPO_PUBLIC_RESTAURANT_ID: ${{ secrets.EXPO_PUBLIC_RESTAURANT_ID }}
+          EXPO_PUBLIC_APP_ENV: ${{ inputs.channel }}
+          CHANNEL: ${{ inputs.channel }}
+          MESSAGE: ${{ inputs.message }}
+        run: |
+          set +e
+          # `--platform android` se queda, pero ya no por el runtime.
+          #
+          # Con el runtime literal la plataforma no cambia el numero: es la
+          # misma cadena para las dos. Se fija porque lo unico que hay
+          # publicado es un APK, y sin el flag `eas update` publica para
+          # `all` y devuelve un JSON con UNA ENTRADA POR PLATAFORMA. El
+          # `.[0]` de aqui abajo cogia entonces la de iOS, y el paso que
+          # comprueba el alcance estaba mirando un runtime que no era el
+          # del update de Android. Con la plataforma fijada, `.[0]` es el
+          # unico update que hay.
+          eas update --channel "$CHANNEL" --platform android --message "$MESSAGE" --non-interactive --json > update.json 2> update.err
+          code=$?
+          set -e
+
+          sed -r 's/\x1B\[[0-9;]*[a-zA-Z]//g' update.err > update.log || cp update.err update.log
+
+          if [ "$code" -ne 0 ]; then
+            echo "::group::Log de eas update"
+            cat update.log
+            echo "::endgroup::"
+            tail -60 update.log > update.tail
+            exit "$code"
+          fi
+
+          {
+            echo "group_id=$(jq -r '.[0].group // empty' update.json)"
+            echo "runtime=$(jq -r '.[0].runtimeVersion // empty' update.json)"
+          } >> "$GITHUB_OUTPUT"
+
+      # SI ESTE UPDATE PUEDE LLEGAR A ALGUN TELEFONO
+      #
+      # EAS sirve los updates por canal MAS runtime. Si el runtime del
+      # update no lo tiene ningun APK, el update se publica, el run sale
+      # verde, y no lo recoge nadie: el telefono sigue con el bundle
+      # embebido de su build. Eso paso, y estuvo pasando cinco publicaciones
+      # seguidas sin que se viera en ningun sitio.
+      #
+      # Llegue a desactivar este paso porque su alarma parecia falsa. No lo
+      # era: acertaba las cinco veces. Falla el run, porque un update que no
+      # llega es un fallo aunque se publique bien.
+      #
+      # Sigue haciendo falta con el runtime literal, y ahora avisa de algo
+      # concreto: que se subio el runtimeVersion y no se ha recompilado
+      # todavia. Los APK viejos se quedan en el suyo, que es exactamente lo
+      # que se quiere, pero conviene enterarse.
+      #
+      # La unica cautela que se conserva es la que importa: si de algun
+      # build no se pudo leer el runtime, "no coincide" podria ser "no supe
+      # mirarlo", y entonces avisa en vez de fallar.
+      - name: Comprobar que hay un APK que pueda recogerlo
+        id: reach
+        if: steps.update.outputs.runtime != ''
+        working-directory: apps/mobile
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          RUNTIME: ${{ steps.update.outputs.runtime }}
+        run: |
+          if ! eas build:list --platform android --status finished --limit 30 --json --non-interactive > builds.json 2> builds.err; then
+            echo "::warning::No se pudo consultar los builds de EAS; el update queda sin comprobar."
+            cat builds.err || true
+            exit 0
+          fi
+
+          total=$(jq 'length' builds.json 2>/dev/null || echo 0)
+          campos='( (.runtime? | objects | .version?),
+                    (.runtime? | strings),
+                    (.runtimeVersion? | strings),
+                    (.fingerprint? | objects | .hash?),
+                    (.fingerprint? | strings) )'
+          leidos=$(jq "[ .[] | $campos ] | map(select(type == \"string\" and . != \"\")) | length" builds.json 2>/dev/null || echo 0)
+          runtimes=$(jq -r "[ .[] | $campos ] | map(select(type == \"string\" and . != \"\")) | unique | .[]" builds.json 2>/dev/null || true)
+
+          echo "Runtime del update: $RUNTIME"
+          echo "Builds terminados ($total):"
+          jq -r '.[] | "  " + ((.id // "?") | tostring)[0:8]
+                     + "  perfil=" + ((.buildProfile // "?") | tostring)
+                     + "  runtime=" + ((.runtime // "-") | tostring)' builds.json 2>/dev/null || true
+
+          if printf '%s\n' "$runtimes" | grep -qx "$RUNTIME"; then
+            echo "coincide=si" >> "$GITHUB_OUTPUT"
+            echo "Hay un APK con este runtime: el update le llegara."
+            exit 0
+          fi
+
+          if [ "$total" -eq 0 ] || [ "$leidos" -lt "$total" ]; then
+            echo "coincide=?" >> "$GITHUB_OUTPUT"
+            echo "::warning::De $total builds solo se leyo el runtime de $leidos: sin comprobar."
+            exit 0
+          fi
+
+          echo "coincide=no" >> "$GITHUB_OUTPUT"
+          echo "::error::Ninguno de los $total APK terminados tiene el runtime $RUNTIME."
+          echo "Este update NO va a llegar a ningun telefono: seguiran con el bundle de su build."
+          echo "Hace falta recompilar con 'Build Android (EAS)' desde este mismo arbol."
+          exit 1
+
+      - name: Resumen del run
+        if: always()
+        working-directory: apps/mobile
+        env:
+          GROUP_ID: ${{ steps.update.outputs.group_id }}
+          RUNTIME: ${{ steps.update.outputs.runtime }}
+          CHANNEL: ${{ inputs.channel }}
+          MESSAGE: ${{ inputs.message }}
+          COINCIDE: ${{ steps.reach.outputs.coincide }}
+        run: |
+          {
+            echo "# Update de \`$CHANNEL\`"
+            echo
+            if [ -n "$GROUP_ID" ]; then
+              echo "Publicado: **$MESSAGE**"
+              echo
+              echo "| | |"
+              echo "|---|---|"
+              echo "| Canal | \`$CHANNEL\` |"
+              echo "| Grupo | \`$GROUP_ID\` |"
+              echo "| Runtime | \`$RUNTIME\` |"
+              echo
+              if [ "$COINCIDE" = "no" ]; then
+                echo "> **Este update no le llega a nadie.** Ningun APK tiene el"
+                echo "> runtime \`$RUNTIME\`, asi que los telefonos seguiran con el"
+                echo "> bundle de su build. Hay que recompilar con **Build Android (EAS)**."
+                echo ">"
+                echo "> Si acabas de subir el \`runtimeVersion\` en \`app.json\`, es esto:"
+                echo "> el APK adopta el nuevo valor en la siguiente compilacion."
+              elif [ "$COINCIDE" = "si" ]; then
+                echo "Hay un APK con este runtime: los telefonos que lo tengan"
+                echo "recogen el update al siguiente arranque."
+              else
+                echo "> Sin comprobar: EAS no dio el runtime de todos los APK."
+              fi
+            else
+              echo "## El update fallo"
+              echo
+              if [ -s update.tail ]; then
+                echo '```'
+                cat update.tail
+                echo '```'
+              else
+                echo "Revisa el log del paso \`Publicar\`."
+              fi
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Guardar el log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: eas-update-metadata
+          path: |
+            apps/mobile/update.json
+            apps/mobile/update.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+      # EL ULTIMO PASO DEL JOB, Y TIENE QUE SEGUIR SIENDOLO.
+      # Un log de estos tiene miles de lineas y las herramientas que lo
+      # leen devuelven solo el final. Detras de este paso solo queda la
+      # limpieza del runner, asi que estos numeros caben en esa ventana.
+      # Ponerlo antes de la subida del artefacto ya lo dejo fuera una vez.
+      - name: Los dos numeros, al final
+        if: always()
+        env:
+          RUNTIME: ${{ steps.update.outputs.runtime }}
+          COINCIDE: ${{ steps.reach.outputs.coincide }}
+          GRUPO: ${{ steps.update.outputs.group_id }}
+        run: |
+          echo "==================================================="
+          echo " runtime del update : ${RUNTIME:-(no se publico)}"
+          echo " hay APK que lo coja: ${COINCIDE:-(sin comprobar)}"
+          echo " grupo              : ${GRUPO:-(ninguno)}"
+          echo "==================================================="

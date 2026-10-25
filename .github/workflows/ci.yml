@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # Sin `version`: la toma de "packageManager" en package.json,
+      # que es la unica fuente de verdad. Pasarla dos veces hace fallar la action.
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+
+  database:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+        ports: ['5432:5432']
+    steps:
+      - uses: actions/checkout@v7
+      - name: Aplicar migraciones en una base limpia
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f .github/db-harness.sql
+          for f in supabase/migrations/*.sql; do
+            echo "-- $f"
+            psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f "$f"
+          done
+      - name: Verificar que RLS esta activo en TODAS las tablas publicas
+        env:
+          PGPASSWORD: postgres
+        run: |
+          MISSING=$(psql -h localhost -U postgres -tAc "
+            select string_agg(t.tablename, ', ')
+            from pg_tables t
+            join pg_class c on c.relname = t.tablename
+            where t.schemaname = 'public' and c.relrowsecurity = false;
+          ")
+          if [ -n "$MISSING" ]; then
+            echo "::error::Tablas publicas sin RLS: $MISSING"; exit 1
+          fi
+          echo "OK: todas las tablas publicas tienen RLS"
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with: { fetch-depth: 0 }
+      - name: Buscar secretos de Clover o Supabase filtrados
+        run: |
+          # El nombre se arma por partes para que este archivo no se
+          # detecte a si mismo al buscarlo.
+          NAME='CLOVER_APP''_SECRET'
+
+          # SE BUSCA UNA ASIGNACION CON VALOR, NO UNA MENCION DEL NOMBRE.
+          #
+          # Antes bastaba con nombrar la variable, y eso empezo a dar
+          # falsos positivos en cuanto existio el primer codigo que la
+          # LEE: la Edge Function de OAuth, que la pide por su nombre a
+          # Deno.env. Un backend que necesita el App Secret tiene que
+          # nombrar la variable en alguna parte; lo que no puede aparecer
+          # nunca es su VALOR, que es lo que este patron busca ahora.
+          #
+          # No se pierde cobertura: un secreto versionado siempre llega
+          # como asignacion —en un .env que se colo, o en un yaml— y las
+          # dos formas caen aqui. Lo unico que deja de saltar es la
+          # mencion del nombre a secas, que nunca fue un secreto.
+          PATTERN="(${NAME}[[:space:]]*[:=][[:space:]]*['\"]?[A-Za-z0-9_-]{8,}|service_role.*ey[A-Za-z0-9]{20,})"
+          if git grep -nE "$PATTERN" -- \
+               ':!.env.example' ':!.github/workflows' ':!*.md' ; then
+            echo '::error::Posible secreto versionado'; exit 1
+          fi

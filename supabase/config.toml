@@ -1,0 +1,68 @@
+# =====================================================================
+# Configuracion del proyecto de Supabase.
+#
+# LA LINEA QUE IMPORTA DE ESTE ARCHIVO ES `verify_jwt = false`.
+# Por defecto, toda Edge Function exige una cabecera `Authorization` con
+# un JWT. Clover redirige el NAVEGADOR del merchant a nuestro callback: no
+# manda esa cabecera, y no puede. Con la verificacion puesta, el callback
+# responde 401 a Clover, el merchant ve una pantalla de error y en nuestros
+# logs no aparece nada — porque la peticion nunca llega a la funcion.
+#
+# Que sea publica no la deja abierta: lo que autoriza es el `connect_token`
+# del enlace, que es de un solo uso y caduca. Ver supabase/functions/oauth.
+# =====================================================================
+
+project_id = "juicebar"
+
+[functions.oauth]
+verify_jwt = false
+
+# El worker de refresco de tokens. `verify_jwt = false` otra vez, y por un
+# motivo DISTINTO al de `oauth` — conviene no confundirlos:
+#
+#   oauth           Clover redirige un NAVEGADOR aqui y no puede mandar la
+#                   cabecera. Es un requisito del flujo.
+#   token-refresh   quien llama es pg_net, desde nuestra propia base, y
+#                   puede mandar lo que le digamos. Pero la comprobacion
+#                   del gateway la pasa CUALQUIER clave del proyecto, y la
+#                   anonima es publica: viaja dentro del APK. O sea que
+#                   verify_jwt = true no autorizaria nada, y encima
+#                   obligaria a guardar una segunda credencial en la base.
+#
+# La puerta es WORKER_CRON_SECRET, que existe solo para esto y no da
+# acceso a nada mas. El razonamiento entero esta en
+# supabase/functions/token-refresh/auth.ts.
+[functions.token-refresh]
+verify_jwt = false
+
+# El barrido de catalogo, a mano. Tercer `verify_jwt = false` y tercer
+# motivo, aunque este comparta puerta con el anterior:
+#
+#   catalog-sync    no lo llama ni un navegador ni pg_cron: lo dispara una
+#                   persona con curl. Se le podria pedir un JWT, pero
+#                   seria el mismo JWT que cualquiera con la app instalada
+#                   puede sacar del APK, asi que autorizaria lo mismo que
+#                   nada.
+#
+# Reutiliza WORKER_CRON_SECRET en vez de inventar una credencial nueva:
+# una credencial mas es una credencial mas que rotar, y el alcance de las
+# dos es el mismo —pedir trabajo que ya ibamos a hacer—.
+#
+# Un barrido de mas no rompe nada: es idempotente y el arriendo de la 0017
+# impide que dos corran a la vez sobre la misma sucursal.
+[functions.catalog-sync]
+verify_jwt = false
+
+# El checkout. Cuarto `verify_jwt = false`, y el motivo es el contrario
+# que en los otros tres: aqui SI hace falta saber quien llama —el pedido
+# es del cliente— y precisamente por eso no vale el gateway.
+#
+# La clave anonima ES un JWT valido del proyecto y viaja dentro del APK.
+# Con verify_jwt = true, cualquiera con la app instalada pasa, y pasa SIN
+# SER NADIE: sin `sub` de usuario. El gateway contesta "este token es del
+# proyecto", que no es la pregunta.
+#
+# La funcion cambia el token por un usuario contra /auth/v1/user y, si no
+# sale usuario, no hay pedido. Ver supabase/functions/checkout/auth.ts.
+[functions.checkout]
+verify_jwt = false
