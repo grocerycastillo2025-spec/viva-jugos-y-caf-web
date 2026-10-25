@@ -470,6 +470,13 @@ export async function updatePaymentOptions(storeId: string, settings: PaymentSet
       mercadopago_link: blankToNull(settings.mercadopagoLink),
     })
     .eq('id', storeId);
+  // La app ya se publico pero la base aun no tiene la 0026.
+  if (error?.code === 'PGRST204' || error?.code === '42703') {
+    throw dataError(
+      'Falta correr la actualización de pagos en Supabase (archivo actualizacion-viva-pagos.sql, en SQL Editor → Run).',
+      error.code,
+    );
+  }
   fail(error);
 }
 
