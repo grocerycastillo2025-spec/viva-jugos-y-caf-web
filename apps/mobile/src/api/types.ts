@@ -58,6 +58,11 @@ export interface StoreRow {
   // Migracion 0024.
   payment_options?: Partial<Record<string, boolean>>;
   transfer_info?: string | null;
+  // Migracion 0026.
+  transfer_bank?: string | null;
+  transfer_holder?: string | null;
+  transfer_clabe?: string | null;
+  mercadopago_link?: string | null;
 }
 
 export interface StoreHoursRow {

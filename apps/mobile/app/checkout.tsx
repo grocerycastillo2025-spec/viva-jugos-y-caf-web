@@ -41,7 +41,7 @@ import type { BrandColors } from '../src/domain/branding';
 import { cartItemCount, cartSubtotalCents } from '../src/domain/cart';
 import { formatMoney } from '../src/domain/money';
 import { makeIdempotencyKey } from '../src/domain/order';
-import { enabledCounterMethods, type CounterMethod } from '../src/domain/payment-options';
+import { customerMethods, type CustomerMethod } from '../src/domain/payment-options';
 import {
   buildPickupDays,
   canOrderAsap,
@@ -158,12 +158,9 @@ export default function CheckoutScreen(): ReactNode {
 
   const effectiveSlot = useAsap && asapAvailable ? asapSlot : selected;
 
-  // Formas de pago en mostrador que el dueño tiene prendidas (0024).
-  const methods = useMemo(
-    () => enabledCounterMethods(selectedStore?.payment_options as never),
-    [selectedStore?.payment_options],
-  );
-  const [payWith, setPayWith] = useState<CounterMethod | null>(null);
+  // Formas de pago que el dueño tiene prendidas y listas (0024, 0026).
+  const methods = useMemo(() => customerMethods(selectedStore as never), [selectedStore]);
+  const [payWith, setPayWith] = useState<CustomerMethod | null>(null);
   const chosenPayWith = payWith !== null && methods.includes(payWith) ? payWith : (methods[0] ?? null);
 
   const place = useCallback(async () => {
@@ -462,18 +459,21 @@ export default function CheckoutScreen(): ReactNode {
                     style={[styles.counterNote, on && styles.payOn]}
                   >
                     <Ionicons
-                      name={method === 'cash' ? 'cash-outline' : method === 'card_counter' ? 'card-outline' : 'swap-horizontal-outline'}
+                      name={
+                        method === 'cash'
+                          ? 'cash-outline'
+                          : method === 'card_counter'
+                            ? 'card-outline'
+                            : method === 'mercadopago'
+                              ? 'wallet-outline'
+                              : 'swap-horizontal-outline'
+                      }
                       size={22}
                       color={on ? colors.primary : colors.textMuted}
                     />
                     <View style={styles.counterNoteBody}>
                       <Text style={styles.counterNoteTitle}>{strings.payments.methods[method]}</Text>
                       <Text style={styles.summaryNote}>{strings.payments.hints[method]}</Text>
-                      {on && method === 'transfer' && selectedStore?.transfer_info ? (
-                        <Text style={styles.transferInfo} selectable>
-                          {strings.payments.transferData}: {selectedStore.transfer_info}
-                        </Text>
-                      ) : null}
                     </View>
                     <Ionicons
                       name={on ? 'radio-button-on' : 'radio-button-off'}
@@ -627,7 +627,6 @@ function createStyles(colors: BrandColors) {
     counterNoteBody: { flex: 1, minWidth: 0, gap: 2 },
     payBlock: { gap: spacing.sm, marginTop: spacing.sm },
     payOn: { borderColor: colors.primary, borderWidth: 2 },
-    transferInfo: { color: colors.text, fontSize: typography.label.fontSize, fontWeight: '600', marginTop: 4 },
     counterNoteTitle: { color: colors.text, fontSize: typography.body.fontSize, fontWeight: '800' },
 
     failure: {

@@ -41,7 +41,14 @@ import {
   type DayHours,
 } from '../../src/domain/admin';
 import type { BrandColors } from '../../src/domain/branding';
-import { COUNTER_METHODS, ONLINE_PROVIDERS } from '../../src/domain/payment-options';
+import {
+  AUTOMATIC_PROVIDERS,
+  clabeValid,
+  formatClabe,
+  isMercadoPagoLink,
+  normalizeClabe,
+  paymentSetupProblems,
+} from '../../src/domain/payment-options';
 import { useAsync } from '../../src/hooks/use-async';
 import { strings } from '../../src/strings';
 import { useBranding, useColors } from '../../src/state/branding-context';
@@ -439,6 +446,12 @@ function createStyles(colors: BrandColors) {
     roleChipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
     roleChipText: { color: colors.text, fontWeight: '700', fontSize: typography.label.fontSize },
     roleChipTextOn: { color: colors.onPrimary },
+    paySection: {
+      gap: spacing.sm,
+      paddingTop: spacing.md,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
   });
 }
 
@@ -462,34 +475,86 @@ function PaymentsCard({
     clip: false,
     ...(store.payment_options ?? {}),
   }) as Record<string, boolean>);
-  const [transfer, setTransfer] = useState(store.transfer_info ?? '');
+  const [transferInfo, setTransferInfo] = useState(store.transfer_info ?? '');
+  const [bank, setBank] = useState(store.transfer_bank ?? '');
+  const [holder, setHolder] = useState(store.transfer_holder ?? '');
+  const [clabe, setClabe] = useState(store.transfer_clabe === null || store.transfer_clabe === undefined ? '' : formatClabe(store.transfer_clabe));
+  const [mpLink, setMpLink] = useState(store.mercadopago_link ?? '');
   const { saving, notice, run } = useSaver();
-  const anyCounter = COUNTER_METHODS.some((m) => options[m] === true);
+  const [problems, setProblems] = useState<string[]>([]);
 
   const toggle = (key: string) => (value: boolean): void => setOptions((o) => ({ ...o, [key]: value }));
+  const clabeError = normalizeClabe(clabe) !== '' && !clabeValid(clabe) ? (p.problems.clabe_invalid ?? null) : null;
+  const mpError = mpLink.trim() !== '' && !isMercadoPagoLink(mpLink) ? (p.problems.mp_link_invalid ?? null) : null;
+
+  const save = (): void => {
+    const found = paymentSetupProblems({ options, clabe, transferInfo, mpLink });
+    setProblems(found);
+    if (found.length > 0) return;
+    void run(async () => {
+      await updatePaymentOptions(store.id, {
+        options,
+        transferInfo,
+        transferBank: bank,
+        transferHolder: holder,
+        transferClabe: normalizeClabe(clabe),
+        mercadopagoLink: mpLink.trim(),
+      });
+      reloadStore();
+    });
+  };
 
   return (
     <Card title={p.title}>
       <Text style={styles.label}>{p.counter}</Text>
       <Text style={styles.hint}>{p.counterHint}</Text>
-      {COUNTER_METHODS.map((m) => (
+      {(['cash', 'card_counter'] as const).map((m) => (
         <Toggle key={m} label={strings.payments.methods[m] ?? m} value={options[m] === true} onValueChange={toggle(m)} />
       ))}
-      {options.transfer === true ? (
+
+      <View style={styles.paySection}>
+        <Toggle label={p.transferToggle} value={options.transfer === true} onValueChange={toggle('transfer')} />
+        {options.transfer === true ? (
+          <>
+            <Field label={p.bank} value={bank} onChangeText={setBank} placeholder={p.bankPlaceholder} />
+            <Field label={p.holder} value={holder} onChangeText={setHolder} placeholder={p.holderPlaceholder} />
+            <Field
+              label={p.clabe}
+              value={clabe}
+              onChangeText={setClabe}
+              placeholder={p.clabePlaceholder}
+              keyboardType="number-pad"
+              error={clabeError}
+            />
+            <Field
+              label={p.transferNote}
+              value={transferInfo}
+              onChangeText={setTransferInfo}
+              placeholder={p.transferNotePlaceholder}
+              multiline
+            />
+          </>
+        ) : null}
+      </View>
+
+      <View style={styles.paySection}>
+        <Toggle label={p.mpToggle} value={options.mercadopago === true} onValueChange={toggle('mercadopago')} />
         <Field
-          label={p.transferInfo}
-          value={transfer}
-          onChangeText={setTransfer}
-          placeholder={p.transferPlaceholder}
-          hint={p.transferHint}
-          multiline
+          label={p.mpLink}
+          value={mpLink}
+          onChangeText={setMpLink}
+          placeholder={p.mpLinkPlaceholder}
+          keyboardType="url"
+          autoCapitalize="none"
+          error={mpError}
+          hint={p.mpHelp}
         />
-      ) : null}
-      {!anyCounter ? <Notice tone="error" text={p.noneOn} /> : null}
+        <Text style={styles.hint}>{p.mpNoAccount}</Text>
+      </View>
 
       <Text style={styles.label}>{p.online}</Text>
       <Text style={styles.hint}>{p.onlineHint}</Text>
-      {ONLINE_PROVIDERS.map((m) => (
+      {AUTOMATIC_PROVIDERS.map((m) => (
         <Toggle
           key={m}
           label={strings.payments.methods[m] ?? m}
@@ -499,17 +564,11 @@ function PaymentsCard({
         />
       ))}
 
+      {problems.map((key) => (
+        <Notice key={key} tone="error" text={p.problems[key] ?? key} />
+      ))}
       {notice !== null ? <Notice tone={notice.tone} text={notice.text} /> : null}
-      <Button
-        label={saving ? adminStrings.saving : adminStrings.save}
-        busy={saving}
-        onPress={() =>
-          void run(async () => {
-            await updatePaymentOptions(store.id, options, transfer);
-            reloadStore();
-          })
-        }
-      />
+      <Button label={saving ? adminStrings.saving : adminStrings.save} busy={saving} onPress={save} />
     </Card>
   );
 }

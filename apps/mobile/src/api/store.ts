@@ -1,6 +1,7 @@
 /** Sucursales, horarios y branding de la marca. */
 
 import { dataError } from '../domain/errors';
+import { STORE_COLUMNS_0026, with0026 } from './new-columns';
 import { getSupabase } from '../supabase';
 import type { AppSettingsRow, StoreHoursRow, StoreRow } from './types';
 
@@ -29,12 +30,14 @@ export interface StoreInfo {
  * lo que vuelva es exactamente lo que el cliente puede elegir.
  */
 export async function fetchStores(restaurantId: string): Promise<StoreRow[]> {
-  const { data, error } = await getSupabase()
-    .from('stores')
-    .select(STORE_COLUMNS)
-    .eq('restaurant_id', restaurantId)
-    .order('name', { ascending: true })
-    .returns<StoreRow[]>();
+  const { data, error } = await with0026((withNew) =>
+    getSupabase()
+      .from('stores')
+      .select(STORE_COLUMNS + (withNew ? STORE_COLUMNS_0026 : ''))
+      .eq('restaurant_id', restaurantId)
+      .order('name', { ascending: true })
+      .returns<StoreRow[]>(),
+  );
 
   if (error) throw dataError(error.message, error.code);
   return data ?? [];
@@ -44,7 +47,13 @@ export async function fetchStore(storeId: string): Promise<StoreInfo> {
   const supabase = getSupabase();
 
   const [storeResult, hoursResult] = await Promise.all([
-    supabase.from('stores').select(STORE_COLUMNS).eq('id', storeId).maybeSingle<StoreRow>(),
+    with0026((withNew) =>
+      supabase
+        .from('stores')
+        .select(STORE_COLUMNS + (withNew ? STORE_COLUMNS_0026 : ''))
+        .eq('id', storeId)
+        .maybeSingle<StoreRow>(),
+    ),
     supabase
       .from('store_hours')
       .select('weekday, opens_at, closes_at')

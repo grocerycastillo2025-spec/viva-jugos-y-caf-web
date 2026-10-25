@@ -19,6 +19,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { fetchOrder, type OrderWithItems } from '../../src/api/orders';
 import { fetchOrderPayments, type PaymentRow } from '../../src/api/payments';
 import { DataState } from '../../src/components/DataState';
+import { PayInstructions } from '../../src/components/PayInstructions';
 import { Screen } from '../../src/components/Screen';
 import { Button } from '../../src/components/ui';
 import type { BrandColors } from '../../src/domain/branding';
@@ -118,6 +119,8 @@ export default function OrderScreen(): ReactNode {
           {strings.order.placedAt(new Date(order.created_at).toLocaleDateString(moneyDefaults().locale))}
         </Text>
       </View>
+
+      <PayInstructions order={order} store={selectedStore ?? null} amountCents={displayAmountCents(totals)} />
 
       <View style={styles.statusCard}>
         <Text style={styles.statusTitle}>{strings.order.status[order.status]}</Text>

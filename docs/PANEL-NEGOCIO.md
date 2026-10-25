@@ -81,10 +81,16 @@ teléfono, como una pantalla más).
   personales. Migración `0023_estadisticas.sql`.
 - **Negocio**: datos de la sucursal, horario por día, pausar pedidos, logo,
   colores, **formas de pago** y **equipo**.
-  - Formas de pago (`0024_formas_pago.sql`): efectivo, tarjeta en mostrador
-    y transferencia se prenden y apagan; el cliente elige al pedir y la base
-    rechaza una forma apagada. Mercado Pago, Stripe y Clip aparecen en la
-    lista pero no se pueden activar hasta conectar la cuenta del negocio.
+  - Formas de pago (`0024_formas_pago.sql`, `0026_pago_liga_transferencia.sql`):
+    efectivo y tarjeta en mostrador se prenden y apagan. **Transferencia**
+    pide banco, titular y CLABE (se valida el dígito de control); sin CLABE
+    ni nota no se le ofrece al cliente. **Mercado Pago** funciona con la
+    liga de cobro del negocio (link.mercadopago.com.mx / mpago.la): el
+    cliente ve en su pedido el monto y un botón que abre la liga. Los
+    pedidos de transferencia y Mercado Pago quedan *Pago por confirmar*
+    hasta que el cajero toca **Pago recibido** en Pedidos. Stripe, Clip y el
+    cobro automático de Mercado Pago (Checkout Pro + webhook) siguen
+    pendientes de conectar la cuenta.
   - Equipo (`0025_equipo.sql`): el dueño da acceso de **Dueño** o **Cajero**
     a una cuenta ya registrada (por correo) y lo quita. Nadie se quita a sí
     mismo y siempre queda al menos un dueño. Ya no hace falta SQL para esto.

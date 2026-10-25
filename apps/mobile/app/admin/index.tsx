@@ -12,9 +12,17 @@
 
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Platform, Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import {
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 
-import { fetchStoreOrders, setOrderStatus } from '../../src/api/admin';
+import { fetchStoreOrders, setOrderPaid, setOrderStatus } from '../../src/api/admin';
 import type { OrderWithItems } from '../../src/api/orders';
 import { useAdmin } from '../../src/admin/admin-context';
 import { adminStrings as t } from '../../src/admin/strings';
@@ -30,6 +38,7 @@ import {
 } from '../../src/domain/admin';
 import type { BrandColors } from '../../src/domain/branding';
 import { formatMoney } from '../../src/domain/money';
+import { needsPaymentConfirmation } from '../../src/domain/payment-options';
 import type { OrderStatus } from '../../src/domain/order';
 import { dayKey, formatSlotLabel, partsInZone } from '../../src/domain/pickup';
 import { useAsync } from '../../src/hooks/use-async';
@@ -114,8 +123,27 @@ export default function AdminOrdersScreen(): ReactNode {
     [refresh],
   );
 
+  const markPaid = useCallback(
+    async (order: OrderWithItems, paid: boolean) => {
+      setFailure(null);
+      try {
+        await setOrderPaid(order.id, paid);
+      } catch (cause) {
+        setFailure(`${t.orders.failed}: ${cause instanceof Error ? cause.message : String(cause)}`);
+      } finally {
+        refresh();
+      }
+    },
+    [refresh],
+  );
+
   const grouped = useMemo(() => {
-    const groups: Record<OrderColumn, OrderWithItems[]> = { new: [], preparing: [], ready: [], done: [] };
+    const groups: Record<OrderColumn, OrderWithItems[]> = {
+      new: [],
+      preparing: [],
+      ready: [],
+      done: [],
+    };
     for (const order of data ?? []) groups[orderColumn(order.status)].push(order);
     return groups;
   }, [data]);
@@ -131,7 +159,8 @@ export default function AdminOrdersScreen(): ReactNode {
   }
 
   const liveCount = grouped.new.length + grouped.preparing.length + grouped.ready.length;
-  const clock = updatedAt === null ? '' : formatSlotLabel(updatedAt.getHours() * 60 + updatedAt.getMinutes());
+  const clock =
+    updatedAt === null ? '' : formatSlotLabel(updatedAt.getHours() * 60 + updatedAt.getMinutes());
 
   return (
     <AdminShell>
@@ -164,7 +193,13 @@ export default function AdminOrdersScreen(): ReactNode {
                 {t.orders.columns[column]} · {grouped[column].length}
               </Text>
               {grouped[column].map((order) => (
-                <OrderCard key={order.id} order={order} timeZone={store.timezone} onMove={move} />
+                <OrderCard
+                  key={order.id}
+                  order={order}
+                  timeZone={store.timezone}
+                  onMove={move}
+                  onPaid={markPaid}
+                />
               ))}
             </View>
           ))}
@@ -177,7 +212,14 @@ export default function AdminOrdersScreen(): ReactNode {
             {t.orders.columns.done} · {grouped.done.length}
           </Text>
           {grouped.done.map((order) => (
-            <OrderCard key={order.id} order={order} timeZone={store.timezone} onMove={move} compact />
+            <OrderCard
+              key={order.id}
+              order={order}
+              timeZone={store.timezone}
+              onMove={move}
+              onPaid={markPaid}
+              compact
+            />
           ))}
         </View>
       ) : null}
@@ -189,11 +231,17 @@ function OrderCard({
   order,
   timeZone,
   onMove,
+  onPaid,
   compact = false,
 }: {
   readonly order: OrderWithItems;
   readonly timeZone: string;
-  readonly onMove: (order: OrderWithItems, to: OrderStatus, reason?: string | null) => Promise<void>;
+  readonly onMove: (
+    order: OrderWithItems,
+    to: OrderStatus,
+    reason?: string | null,
+  ) => Promise<void>;
+  readonly onPaid: (order: OrderWithItems, paid: boolean) => Promise<void>;
   readonly compact?: boolean;
 }): ReactNode {
   const colors = useColors();
@@ -217,6 +265,16 @@ function OrderCard({
     } finally {
       setBusy(false);
       setCanceling(false);
+    }
+  };
+
+  const paid = order.paid_confirmed_at !== null && order.paid_confirmed_at !== undefined;
+  const togglePaid = async (value: boolean): Promise<void> => {
+    setBusy(true);
+    try {
+      await onPaid(order, value);
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -270,7 +328,11 @@ function OrderCard({
 
       <View style={styles.orderFoot}>
         <Text style={styles.orderTotal}>
-          {t.orders.total} {formatMoney(order.total_cents > 0 ? order.total_cents : order.subtotal_cents, order.currency)}
+          {t.orders.total}{' '}
+          {formatMoney(
+            order.total_cents > 0 ? order.total_cents : order.subtotal_cents,
+            order.currency,
+          )}
         </Text>
         {order.payment_method === 'counter' && !compact ? (
           <Text style={styles.payTag}>
@@ -279,7 +341,33 @@ function OrderCard({
               : t.orders.payAtCounter}
           </Text>
         ) : null}
+        {needsPaymentConfirmation(order.pay_with) && order.status !== 'canceled' ? (
+          <Text style={[styles.payTag, paid ? styles.paidTag : styles.unpaidTag]}>
+            {paid ? `✓ ${t.payments.paid}` : t.payments.unpaid}
+          </Text>
+        ) : null}
       </View>
+
+      {!compact && needsPaymentConfirmation(order.pay_with) && order.status !== 'canceled' ? (
+        paid ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => void togglePaid(false)}
+            disabled={busy}
+            style={styles.cancelLink}
+          >
+            <Text style={styles.cancelLinkText}>{t.payments.unmarkPaid}</Text>
+          </Pressable>
+        ) : (
+          <Button
+            label={t.payments.markPaid}
+            variant="outline"
+            busy={busy}
+            onPress={() => void togglePaid(true)}
+            style={styles.paidButton}
+          />
+        )
+      ) : null}
 
       {!compact && !canceling ? (
         <View style={styles.actions}>
@@ -353,7 +441,12 @@ function createStyles(colors: BrandColors) {
       borderRadius: radius.md,
     },
     bannerText: { color: colors.onAccent, fontWeight: '800', fontSize: typography.body.fontSize },
-    toolbar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: spacing.sm },
+    toolbar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'flex-end',
+      gap: spacing.sm,
+    },
     updated: { color: colors.textFaint, fontSize: typography.caption.fontSize },
     refresh: {
       width: 34,
@@ -366,7 +459,12 @@ function createStyles(colors: BrandColors) {
     },
     empty: { alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xxl },
     emptyTitle: { color: colors.text, fontSize: typography.section.fontSize, fontWeight: '800' },
-    emptyBody: { color: colors.textMuted, fontSize: typography.body.fontSize, textAlign: 'center', maxWidth: 360 },
+    emptyBody: {
+      color: colors.textMuted,
+      fontSize: typography.body.fontSize,
+      textAlign: 'center',
+      maxWidth: 360,
+    },
 
     columns: { gap: spacing.lg },
     columnsRow: { flexDirection: 'row', alignItems: 'flex-start' },
@@ -399,7 +497,11 @@ function createStyles(colors: BrandColors) {
       borderWidth: 1,
       borderColor: colors.border,
     },
-    statusPillText: { color: colors.textMuted, fontSize: typography.caption.fontSize, fontWeight: '700' },
+    statusPillText: {
+      color: colors.textMuted,
+      fontSize: typography.caption.fontSize,
+      fontWeight: '700',
+    },
     orderTime: {
       marginLeft: 'auto',
       color: colors.primary,
@@ -408,16 +510,33 @@ function createStyles(colors: BrandColors) {
     },
     orderMeta: { color: colors.textMuted, fontSize: typography.label.fontSize },
     line: { flexDirection: 'row', gap: spacing.sm },
-    lineQty: { color: colors.text, fontWeight: '800', fontSize: typography.body.fontSize, minWidth: 26 },
+    lineQty: {
+      color: colors.text,
+      fontWeight: '800',
+      fontSize: typography.body.fontSize,
+      minWidth: 26,
+    },
     lineBody: { flex: 1, minWidth: 0, gap: 2 },
     lineName: { color: colors.text, fontWeight: '700', fontSize: typography.body.fontSize },
     lineMod: { color: colors.textMuted, fontSize: typography.label.fontSize },
     lineNote: { color: colors.accent, fontSize: typography.label.fontSize, fontStyle: 'italic' },
-    noteBox: { backgroundColor: colors.background, borderRadius: radius.sm, padding: spacing.sm, gap: 2 },
-    noteLabel: { color: colors.textFaint, fontSize: typography.caption.fontSize, fontWeight: '700' },
+    noteBox: {
+      backgroundColor: colors.background,
+      borderRadius: radius.sm,
+      padding: spacing.sm,
+      gap: 2,
+    },
+    noteLabel: {
+      color: colors.textFaint,
+      fontSize: typography.caption.fontSize,
+      fontWeight: '700',
+    },
     noteText: { color: colors.text, fontSize: typography.label.fontSize },
     orderFoot: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap' },
     orderTotal: { color: colors.text, fontWeight: '800', fontSize: typography.body.fontSize },
+    paidButton: { alignSelf: 'flex-start', minHeight: 40 },
+    paidTag: { color: colors.success, borderColor: colors.success },
+    unpaidTag: { color: colors.danger, borderColor: colors.danger },
     payTag: {
       color: colors.primary,
       fontSize: typography.caption.fontSize,
@@ -431,7 +550,11 @@ function createStyles(colors: BrandColors) {
     actions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, alignItems: 'center' },
     actionButton: { minHeight: 42, paddingHorizontal: spacing.lg },
     cancelLink: { paddingVertical: spacing.sm, paddingHorizontal: spacing.xs },
-    cancelLinkText: { color: colors.danger, fontWeight: '700', fontSize: typography.label.fontSize },
+    cancelLinkText: {
+      color: colors.danger,
+      fontWeight: '700',
+      fontSize: typography.label.fontSize,
+    },
     cancelBox: { gap: spacing.sm },
     cancelInput: {
       minHeight: 42,

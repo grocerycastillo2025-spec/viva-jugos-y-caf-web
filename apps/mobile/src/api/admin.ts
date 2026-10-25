@@ -12,6 +12,7 @@ import { dataError } from '../domain/errors';
 import type { Cents } from '../domain/money';
 import type { OrderStatus } from '../domain/order';
 import { getSupabase } from '../supabase';
+import { ORDER_COLUMNS_0026, STORE_COLUMNS_0026, with0026 } from './new-columns';
 import { ITEM_COLUMNS, ORDER_COLUMNS, type OrderWithItems } from './orders';
 import type { AppSettingsRow, StoreHoursRow, StoreRow } from './types';
 
@@ -54,13 +55,15 @@ const ADMIN_STORE_COLUMNS =
   'surcharge_policy, surcharge_rate, payments_mode, catalog_source, currency, payment_options, transfer_info';
 
 export async function fetchAdminStores(restaurantId: string): Promise<StoreRow[]> {
-  const { data, error } = await getSupabase()
-    .from('stores')
-    .select(ADMIN_STORE_COLUMNS)
-    .eq('restaurant_id', restaurantId)
-    .is('deleted_at', null)
-    .order('name')
-    .returns<StoreRow[]>();
+  const { data, error } = await with0026((withNew) =>
+    getSupabase()
+      .from('stores')
+      .select(ADMIN_STORE_COLUMNS + (withNew ? STORE_COLUMNS_0026 : ''))
+      .eq('restaurant_id', restaurantId)
+      .is('deleted_at', null)
+      .order('name')
+      .returns<StoreRow[]>(),
+  );
   fail(error);
   return data ?? [];
 }
@@ -74,27 +77,32 @@ export async function fetchAdminStores(restaurantId: string): Promise<StoreRow[]
  * de la sucursal). Lo que el mostrador necesita ver en un turno.
  */
 export async function fetchStoreOrders(storeId: string, businessDay: string): Promise<OrderWithItems[]> {
-  const columns = `${ORDER_COLUMNS}, ${ITEM_COLUMNS}`;
+  const columns = (withNew: boolean): string =>
+    `${ORDER_COLUMNS}${withNew ? ORDER_COLUMNS_0026 : ''}, ${ITEM_COLUMNS}`;
   const supabase = getSupabase();
 
   const [active, today] = await Promise.all([
-    supabase
-      .from('orders')
-      .select(columns)
-      .eq('store_id', storeId)
-      .in('status', ['confirmed', 'preparing', 'ready'])
-      .order('pickup_at', { ascending: true })
-      .limit(200)
-      .returns<OrderWithItems[]>(),
-    supabase
-      .from('orders')
-      .select(columns)
-      .eq('store_id', storeId)
-      .eq('business_day', businessDay)
-      .in('status', ['completed', 'canceled'])
-      .order('created_at', { ascending: false })
-      .limit(100)
-      .returns<OrderWithItems[]>(),
+    with0026((withNew) =>
+      supabase
+        .from('orders')
+        .select(columns(withNew))
+        .eq('store_id', storeId)
+        .in('status', ['confirmed', 'preparing', 'ready'])
+        .order('pickup_at', { ascending: true })
+        .limit(200)
+        .returns<OrderWithItems[]>(),
+    ),
+    with0026((withNew) =>
+      supabase
+        .from('orders')
+        .select(columns(withNew))
+        .eq('store_id', storeId)
+        .eq('business_day', businessDay)
+        .in('status', ['completed', 'canceled'])
+        .order('created_at', { ascending: false })
+        .limit(100)
+        .returns<OrderWithItems[]>(),
+    ),
   ]);
 
   fail(active.error);
@@ -439,18 +447,35 @@ export async function updateSettings(
 // FORMAS DE PAGO (0024)
 // ---------------------------------------------------------------------
 
-export async function updatePaymentOptions(
-  storeId: string,
-  options: Record<string, boolean>,
-  transferInfo: string,
-): Promise<void> {
+export interface PaymentSettings {
+  readonly options: Record<string, boolean>;
+  readonly transferInfo: string;
+  readonly transferBank: string;
+  readonly transferHolder: string;
+  readonly transferClabe: string;
+  readonly mercadopagoLink: string;
+}
+
+const blankToNull = (value: string): string | null => (value.trim() === '' ? null : value.trim());
+
+export async function updatePaymentOptions(storeId: string, settings: PaymentSettings): Promise<void> {
   const { error } = await getSupabase()
     .from('stores')
     .update({
-      payment_options: options,
-      transfer_info: transferInfo.trim() === '' ? null : transferInfo.trim(),
+      payment_options: settings.options,
+      transfer_info: blankToNull(settings.transferInfo),
+      transfer_bank: blankToNull(settings.transferBank),
+      transfer_holder: blankToNull(settings.transferHolder),
+      transfer_clabe: blankToNull(settings.transferClabe.replace(/[\s-]/g, '')),
+      mercadopago_link: blankToNull(settings.mercadopagoLink),
     })
     .eq('id', storeId);
+  fail(error);
+}
+
+/** El cajero o el dueño marca que llegó el pago (0026). */
+export async function setOrderPaid(orderId: string, paid: boolean): Promise<void> {
+  const { error } = await getSupabase().rpc('set_order_paid', { p_order_id: orderId, p_paid: paid });
   fail(error);
 }
 

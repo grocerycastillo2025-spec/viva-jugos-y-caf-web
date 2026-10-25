@@ -101,7 +101,9 @@ select pg_temp.esperar_error(
       now() + interval '1 day', false, null, '[{"clover_item_id":"viva-cafe"}]'::jsonb, 'mercadopago')$$,
   'payment_method_not_available');
 reset role;
-update public.stores set payment_options = payment_options || '{"cash": false}'
+-- Desde 0026 la transferencia necesita datos: se pone una CLABE.
+update public.stores set payment_options = payment_options || '{"cash": false}',
+       transfer_clabe = '002010077777777771'
  where id = '33333333-3333-4333-8333-333333333333';
 select pg_temp.como('cccccccc-0000-4000-8000-000000000003');
 select pg_temp.esperar_error(

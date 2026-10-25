@@ -11,6 +11,7 @@ import { dataError } from '../domain/errors';
 import type { Cents } from '../domain/money';
 import type { OrderStatus } from '../domain/order';
 import type { SlotOccupancy } from '../domain/pickup';
+import { ORDER_COLUMNS_0026, with0026 } from './new-columns';
 import { getSupabase } from '../supabase';
 
 export interface OrderItemModifierRow {
@@ -60,6 +61,8 @@ export interface OrderRow {
   cancel_reason: string | null;
   // Migracion 0024: como dijo el cliente que pagaria.
   pay_with: string | null;
+  // Migracion 0026: el negocio confirmo que llego el pago.
+  paid_confirmed_at?: string | null;
 }
 
 export interface OrderWithItems extends OrderRow {
@@ -249,24 +252,28 @@ export async function fetchMyOrders(limit = 30): Promise<OrderWithItems[]> {
   const userId = auth.session?.user.id;
   if (userId === undefined) return [];
 
-  const { data, error } = await supabase
-    .from('orders')
-    .select(`${ORDER_COLUMNS}, ${ITEM_COLUMNS}`)
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false })
-    .limit(limit)
-    .returns<OrderWithItems[]>();
+  const { data, error } = await with0026((withNew) =>
+    supabase
+      .from('orders')
+      .select(`${ORDER_COLUMNS}${withNew ? ORDER_COLUMNS_0026 : ''}, ${ITEM_COLUMNS}`)
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(limit)
+      .returns<OrderWithItems[]>(),
+  );
 
   if (error) throw dataError(error.message, error.code);
   return data ?? [];
 }
 
 export async function fetchOrder(orderId: string): Promise<OrderWithItems | null> {
-  const { data, error } = await getSupabase()
-    .from('orders')
-    .select(`${ORDER_COLUMNS}, ${ITEM_COLUMNS}`)
-    .eq('id', orderId)
-    .maybeSingle<OrderWithItems>();
+  const { data, error } = await with0026((withNew) =>
+    getSupabase()
+      .from('orders')
+      .select(`${ORDER_COLUMNS}${withNew ? ORDER_COLUMNS_0026 : ''}, ${ITEM_COLUMNS}`)
+      .eq('id', orderId)
+      .maybeSingle<OrderWithItems>(),
+  );
 
   if (error) throw dataError(error.message, error.code);
   return data;
