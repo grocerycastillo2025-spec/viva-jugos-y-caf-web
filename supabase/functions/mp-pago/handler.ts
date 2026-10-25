@@ -95,7 +95,9 @@ export function createMpPagoHandler(deps: MpPagoDeps): (req: Request) => Promise
     }
     const me = (await res.json().catch(() => ({}))) as { nickname?: unknown; site_id?: unknown };
     const label = typeof me.nickname === 'string' ? me.nickname.slice(0, 120) : null;
-    const test = isTestToken(deps.mpToken);
+    // Las credenciales de prueba nuevas empiezan con APP_USR- igual que las
+    // reales; lo que delata la prueba es la cuenta (TESTUSER...).
+    const test = isTestToken(deps.mpToken) || (label !== null && /^TEST_?USER/i.test(label));
     await setAccount(storeId, 'active', !test, label);
     return json(200, { connected: true, test, account: label, site: me.site_id ?? null });
   }
