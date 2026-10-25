@@ -75,6 +75,8 @@
     },
     "extra": {
       "restaurantId": "11111111-1111-4111-8111-111111111111",
+      "supabaseUrl": "https://mcvitjvsrmkgdqljbwhd.supabase.co",
+      "supabaseKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1jdml0anZzcm1rZ2RxbGpid2hkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI5NDkxMzEsImV4cCI6MjEwODUyNTEzMX0.W3XW287m32EDxB24ABlpsWw8Fo1V477baPGx5dmNkXE",
       "eas": {
         "projectId": "4ed95bba-1725-4c3a-abf9-910f0fd1a351"
       },
