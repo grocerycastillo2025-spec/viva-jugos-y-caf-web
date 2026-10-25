@@ -13,7 +13,7 @@
       "url": "https://u.expo.dev/4ed95bba-1725-4c3a-abf9-910f0fd1a351",
       "fallbackToCacheTimeout": 0
     },
-    "runtimeVersion": "1.0.0",
+    "runtimeVersion": "1.1.0",
     "ios": {
       "bundleIdentifier": "com.vivajuicecoffee.app",
       "supportsTablet": true

@@ -18,7 +18,9 @@ export async function fetchProfile(userId: string): Promise<ProfileRow | null> {
 export async function fetchLoyaltyProgram(restaurantId: string): Promise<LoyaltyProgramRow | null> {
   const { data, error } = await getSupabase()
     .from('loyalty_programs')
-    .select('restaurant_id, enabled, points_per_dollar, min_points_to_redeem')
+    .select(
+      'restaurant_id, enabled, points_per_dollar, min_points_to_redeem, points_per_visit, visit_cooldown_hours',
+    )
     .eq('restaurant_id', restaurantId)
     .maybeSingle<LoyaltyProgramRow>();
 

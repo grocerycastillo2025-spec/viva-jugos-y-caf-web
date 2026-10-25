@@ -10,6 +10,7 @@ export const adminStrings = {
   tabs: {
     orders: 'Pedidos',
     menu: 'Menú',
+    loyalty: 'Lealtad',
     business: 'Negocio',
   },
   backToApp: 'Ver la app',
@@ -123,6 +124,55 @@ export const adminStrings = {
     orderHint: 'Los números más bajos salen primero.',
     deleteConfirm: '¿Eliminar este producto del menú? Los pedidos anteriores no se ven afectados.',
     notFound: 'Ese producto ya no existe.',
+  },
+
+  loyalty: {
+    validateTitle: 'Validar canje',
+    validateHint: 'Escribe el código que te enseña el cliente en su app.',
+    codePlaceholder: 'Ej. K7M2QX',
+    validate: 'Validar',
+    deliver: (reward: string, customer: string | null): string =>
+      `Entrega: ${reward}${customer === null ? '' : ` a ${customer}`}`,
+    notFound: 'Ese código no existe o no es de este negocio.',
+    alreadyUsed: (when: string): string => `Ese canje ya se entregó (${when}).`,
+    canceled: 'Ese canje fue cancelado por el cliente.',
+    recent: 'Últimos canjes',
+    noRecent: 'Todavía no hay canjes.',
+    statusLabel: { issued: 'Por entregar', used: 'Entregado', canceled: 'Cancelado' },
+
+    programTitle: 'Programa de puntos',
+    enabled: 'Programa activo',
+    enabledHint: 'Muestra la pestaña Puntos en la app y permite sumar y canjear.',
+    perVisit: 'Puntos por visita',
+    cooldown: 'Horas entre visitas del mismo cliente',
+    cooldownHint: '20 = una visita al día. 0 = sin límite (no recomendado: un QR fotografiado se podría usar sin venir).',
+    invalidNumber: 'Escribe un número válido',
+
+    qrTitle: 'QR del local',
+    modeStatic: 'Fijo (impreso)',
+    modeStaticHint: 'Lo imprimes y lo pegas en el mostrador. Si alguien comparte la foto, genera uno nuevo.',
+    modeRotating: 'En pantalla (cambia cada minuto)',
+    modeRotatingHint: 'Para una tablet o pantalla en el mostrador. Una foto del QR deja de servir al minuto.',
+    print: 'Imprimir QR',
+    regenerate: 'Generar código nuevo',
+    regenerateConfirm: 'El QR impreso actual dejará de funcionar. ¿Generar uno nuevo?',
+    openScreen: 'Abrir en pantalla completa',
+    rotatedAt: (when: string): string => `Código vigente desde ${when}`,
+    previewNote: 'Escanéalo con la app para probarlo.',
+
+    rewardsTitle: 'Recompensas',
+    rewardName: 'Recompensa',
+    rewardNamePlaceholder: 'Ej. Jugo chico gratis',
+    rewardDescription: 'Detalle (opcional)',
+    rewardCost: 'Puntos necesarios',
+    rewardActive: 'Disponible',
+    addReward: 'Agregar recompensa',
+    noRewards: 'Agrega al menos una recompensa para que los puntos sirvan de algo.',
+
+    screenTitle: 'Suma puntos en tu visita',
+    screenBody: 'Abre la app → Puntos → Escanear QR del local',
+    screenExpires: (seconds: number): string => `Cambia en ${seconds} s`,
+    exitScreen: 'Salir',
   },
 
   business: {

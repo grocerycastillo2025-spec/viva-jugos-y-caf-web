@@ -83,4 +83,16 @@ insert into public.store_pickup_config (
 values ('33333333-3333-4333-8333-333333333333', 15, 10, 8, 1, true)
 on conflict (store_id) do nothing;
 
+-- Lealtad: apagada hasta que el dueño la configure en el panel
+-- (Lealtad -> Programa). 10 puntos por visita, una visita cada 20 h.
+insert into public.loyalty_programs (
+  restaurant_id, enabled, points_per_dollar, min_points_to_redeem, points_per_visit, visit_cooldown_hours
+)
+values ('11111111-1111-4111-8111-111111111111', false, 0, 0, 10, 20)
+on conflict (restaurant_id) do nothing;
+
+insert into public.store_visit_codes (store_id)
+values ('33333333-3333-4333-8333-333333333333')
+on conflict (store_id) do nothing;
+
 commit;

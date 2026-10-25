@@ -24,11 +24,12 @@ import { radius, spacing, type as typography } from '../theme';
 import { useAdmin } from './admin-context';
 import { adminStrings as t } from './strings';
 
-type Tab = { readonly href: '/admin' | '/admin/menu' | '/admin/business'; readonly label: string; readonly icon: keyof typeof Ionicons.glyphMap; readonly ownerOnly: boolean };
+type Tab = { readonly href: '/admin' | '/admin/menu' | '/admin/lealtad' | '/admin/business'; readonly label: string; readonly icon: keyof typeof Ionicons.glyphMap; readonly ownerOnly: boolean };
 
 const TABS: readonly Tab[] = [
   { href: '/admin', label: t.tabs.orders, icon: 'receipt-outline', ownerOnly: false },
   { href: '/admin/menu', label: t.tabs.menu, icon: 'restaurant-outline', ownerOnly: true },
+  { href: '/admin/lealtad', label: t.tabs.loyalty, icon: 'gift-outline', ownerOnly: false },
   { href: '/admin/business', label: t.tabs.business, icon: 'storefront-outline', ownerOnly: true },
 ];
 
@@ -73,7 +74,7 @@ export function AdminShell({
             <Text style={styles.backLinkText}>{t.backToApp}</Text>
           </Pressable>
         </View>
-        <View style={styles.tabs}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs}>
           {TABS.filter((tab) => isOwner || !tab.ownerOnly).map((tab) => {
             const on = active(tab.href);
             return (
@@ -90,7 +91,7 @@ export function AdminShell({
             );
           })}
           {actions}
-        </View>
+        </ScrollView>
       </View>
       {scroll ? (
         <ScrollView

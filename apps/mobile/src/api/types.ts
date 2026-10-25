@@ -78,6 +78,9 @@ export interface LoyaltyProgramRow {
   enabled: boolean;
   points_per_dollar: number;
   min_points_to_redeem: number;
+  // Migracion 0021: puntos por visita (QR del local).
+  points_per_visit?: number;
+  visit_cooldown_hours?: number;
 }
 
 export interface LoyaltyAccountRow {

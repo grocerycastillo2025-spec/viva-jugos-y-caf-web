@@ -20,6 +20,9 @@ Todo sale de la migración `supabase/migrations/0020_negocio_sin_clover.sql`.
 | Ver y mover pedidos del negocio | — | ✔ | ✔ |
 | Menú, precios, fotos, "agotado" | — | — | ✔ |
 | Horario, datos de la sucursal, logo y colores | — | — | ✔ |
+| Sumar puntos (QR) y canjear recompensas | ✔ | ✔ | ✔ |
+| Validar canjes en el mostrador | — | ✔ | ✔ |
+| Configurar puntos, QR y recompensas | — | — | ✔ |
 | Modo de cobro, fuente del catálogo, estado del negocio | — | — | — (solo plataforma) |
 
 No lo decide la app: lo decide la base con RLS. Las pruebas están en
@@ -70,6 +73,37 @@ teléfono, como una pantalla más).
 El cliente ve los cambios de estado de su pedido sin recargar (la pantalla
 del pedido se revisa cada 20 s mientras está en curso).
 
+## Lealtad: puntos por visita con QR
+
+Migración `0021_lealtad_qr.sql`. Pruebas en `supabase/tests/0021_lealtad_qr.test.sql`.
+
+1. **El dueño lo configura** en Panel → Lealtad: activa el programa, puntos
+   por visita, horas mínimas entre visitas del mismo cliente y las
+   recompensas con su costo en puntos. Activar el programa también muestra
+   la pestaña **Puntos** en la app.
+2. **El QR del local** tiene dos modos:
+   - **Fijo**: se imprime (botón *Imprimir QR*) y se pega en el mostrador.
+     Si se filtra una foto, *Generar código nuevo* invalida el anterior.
+   - **En pantalla**: cambia cada minuto; se abre en una tablet con *Abrir
+     en pantalla completa*. Una foto vieja no sirve.
+3. **El cliente escanea** desde la app (Puntos → *Escanear QR del local*) o
+   con la cámara del teléfono, que abre la app en la pantalla de visita. Si
+   no ha iniciado sesión, se le pide y luego se suma sin volver a escanear.
+   Una visita por cliente cada X horas (20 por defecto).
+4. **Canje**: con puntos suficientes, el cliente canjea y recibe un código de
+   6 letras. En el mostrador, Panel → Lealtad → *Validar canje*. Cada código
+   se entrega una sola vez; el cliente puede cancelar un canje no entregado y
+   recupera sus puntos.
+
+Los puntos solo los escribe la base (funciones `claim_visit`,
+`redeem_reward`, `use_redemption`, `cancel_redemption`). Ni el cliente ni el
+panel pueden cambiar un saldo a mano, y el código del QR no se puede leer
+desde la app del cliente.
+
+El escáner dentro de la app usa la cámara del navegador (necesita HTTPS, que
+GitHub Pages y un dominio propio ya dan). En iPhone conviene escanear desde
+la app instalada: la cámara del teléfono abre Safari, que tiene otra sesión.
+
 ## Lo que todavía no está
 
 - **Pago en línea** (Stripe o Mercado Pago). El modo `counter` queda como
@@ -79,8 +113,10 @@ del pedido se revisa cada 20 s mientras está en curso).
 - **Extras / modificadores** (tamaño, leche, toppings) desde el panel. La
   base y la app del cliente ya los soportan; falta la pantalla para
   editarlos.
-- **Promociones y puntos.** Las tablas existen; están apagados en
-  `app_settings.features` hasta que tengan pantalla en el panel.
+- **Promociones** (descuentos por código o por fecha). La tabla existe; falta
+  la pantalla en el panel y aplicarlas en el pedido.
+- **Escáner en el APK de Android.** Necesita `expo-camera` (dependencia
+  nativa). Mientras tanto, en el APK se escanea con la cámara del teléfono.
 - **Notificaciones push en web.** El cliente sigue su pedido en la pestaña
   Pedidos.
 
