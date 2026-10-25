@@ -51,7 +51,7 @@ export async function fetchMembership(
 const ADMIN_STORE_COLUMNS =
   'id, restaurant_id, name, slug, status, address_line1, address_line2, city, state, ' +
   'postal_code, latitude, longitude, phone, timezone, pickup_enabled, delivery_enabled, ' +
-  'surcharge_policy, surcharge_rate, payments_mode, catalog_source, currency';
+  'surcharge_policy, surcharge_rate, payments_mode, catalog_source, currency, payment_options, transfer_info';
 
 export async function fetchAdminStores(restaurantId: string): Promise<StoreRow[]> {
   const { data, error } = await getSupabase()
@@ -341,7 +341,7 @@ export async function deleteProduct(productId: string): Promise<void> {
  * escribir en las propias.
  */
 export async function uploadImage(
-  bucket: 'menu-images' | 'branding',
+  bucket: 'menu-images' | 'branding' | 'stories',
   folder: string,
   blob: Blob,
   extension: string,
@@ -432,5 +432,70 @@ export async function updateSettings(
     .from('app_settings')
     .update(input)
     .eq('restaurant_id', restaurantId);
+  fail(error);
+}
+
+// ---------------------------------------------------------------------
+// FORMAS DE PAGO (0024)
+// ---------------------------------------------------------------------
+
+export async function updatePaymentOptions(
+  storeId: string,
+  options: Record<string, boolean>,
+  transferInfo: string,
+): Promise<void> {
+  const { error } = await getSupabase()
+    .from('stores')
+    .update({
+      payment_options: options,
+      transfer_info: transferInfo.trim() === '' ? null : transferInfo.trim(),
+    })
+    .eq('id', storeId);
+  fail(error);
+}
+
+/** Proveedores en linea con cuenta activa (los conecta la plataforma). */
+export async function fetchConnectedProviders(storeId: string): Promise<Set<string>> {
+  const { data, error } = await getSupabase()
+    .from('payment_provider_accounts')
+    .select('provider, status')
+    .eq('store_id', storeId)
+    .returns<{ provider: string; status: string }[]>();
+  if (error?.code === '42P01' || error?.code === 'PGRST205') return new Set();
+  fail(error);
+  return new Set((data ?? []).filter((row) => row.status === 'active').map((row) => row.provider));
+}
+
+// ---------------------------------------------------------------------
+// EQUIPO (0025)
+// ---------------------------------------------------------------------
+
+export interface TeamMember {
+  readonly user_id: string;
+  readonly email: string;
+  readonly name: string | null;
+  readonly role: MemberRole;
+}
+
+export async function fetchTeam(restaurantId: string): Promise<TeamMember[]> {
+  const { data, error } = await getSupabase().rpc('list_team', { p_restaurant_id: restaurantId });
+  fail(error);
+  return (data ?? []) as TeamMember[];
+}
+
+export async function addTeamMember(restaurantId: string, email: string, role: MemberRole): Promise<void> {
+  const { error } = await getSupabase().rpc('add_team_member', {
+    p_restaurant_id: restaurantId,
+    p_email: email.trim(),
+    p_role: role,
+  });
+  fail(error);
+}
+
+export async function removeTeamMember(restaurantId: string, userId: string): Promise<void> {
+  const { error } = await getSupabase().rpc('remove_team_member', {
+    p_restaurant_id: restaurantId,
+    p_user_id: userId,
+  });
   fail(error);
 }

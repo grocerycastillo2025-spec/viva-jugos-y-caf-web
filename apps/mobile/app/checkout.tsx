@@ -41,6 +41,7 @@ import type { BrandColors } from '../src/domain/branding';
 import { cartItemCount, cartSubtotalCents } from '../src/domain/cart';
 import { formatMoney } from '../src/domain/money';
 import { makeIdempotencyKey } from '../src/domain/order';
+import { enabledCounterMethods, type CounterMethod } from '../src/domain/payment-options';
 import {
   buildPickupDays,
   canOrderAsap,
@@ -87,7 +88,7 @@ function failureMessage(message: string): string {
     case 'empty_cart':
       return strings.cart.emptyTitle;
     default:
-      return message;
+      return message.includes('payment_method_not_available') ? strings.payments.unavailable : message;
   }
 }
 
@@ -157,6 +158,14 @@ export default function CheckoutScreen(): ReactNode {
 
   const effectiveSlot = useAsap && asapAvailable ? asapSlot : selected;
 
+  // Formas de pago en mostrador que el dueño tiene prendidas (0024).
+  const methods = useMemo(
+    () => enabledCounterMethods(selectedStore?.payment_options as never),
+    [selectedStore?.payment_options],
+  );
+  const [payWith, setPayWith] = useState<CounterMethod | null>(null);
+  const chosenPayWith = payWith !== null && methods.includes(payWith) ? payWith : (methods[0] ?? null);
+
   const place = useCallback(async () => {
     if (effectiveSlot === null || selectedStoreId === null || data?.config === undefined) return;
     if (data?.config === null) return;
@@ -182,7 +191,10 @@ export default function CheckoutScreen(): ReactNode {
     const payAtCounter = selectedStore?.payments_mode === 'counter';
 
     try {
-      const create = payAtCounter ? placeCounterOrder : createPickupOrder;
+      const create = payAtCounter
+        ? (input: Parameters<typeof placeCounterOrder>[0]) =>
+            placeCounterOrder(input, selectedStore?.payment_options === undefined ? null : chosenPayWith)
+        : createPickupOrder;
       const created = await create({
         storeId: selectedStoreId,
         idempotencyKey: idempotencyKey.current,
@@ -223,6 +235,7 @@ export default function CheckoutScreen(): ReactNode {
     note,
     reload,
     router,
+    chosenPayWith,
     selectedStore,
     selectedStoreId,
     useAsap,
@@ -433,12 +446,43 @@ export default function CheckoutScreen(): ReactNode {
           <Text style={styles.summaryNote}>{strings.checkout.taxNote}</Text>
 
           {selectedStore?.payments_mode === 'counter' ? (
-            <View style={styles.counterNote}>
-              <Ionicons name="cash-outline" size={20} color={colors.primary} />
-              <View style={styles.counterNoteBody}>
-                <Text style={styles.counterNoteTitle}>{strings.checkout.payAtCounterTitle}</Text>
-                <Text style={styles.summaryNote}>{strings.checkout.payAtCounterBody}</Text>
-              </View>
+            <View style={styles.payBlock}>
+              <Text style={styles.counterNoteTitle}>{strings.payments.choose}</Text>
+              {methods.length === 0 ? (
+                <Text style={styles.summaryNote}>{strings.payments.none}</Text>
+              ) : null}
+              {methods.map((method) => {
+                const on = chosenPayWith === method;
+                return (
+                  <Pressable
+                    key={method}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: on }}
+                    onPress={() => setPayWith(method)}
+                    style={[styles.counterNote, on && styles.payOn]}
+                  >
+                    <Ionicons
+                      name={method === 'cash' ? 'cash-outline' : method === 'card_counter' ? 'card-outline' : 'swap-horizontal-outline'}
+                      size={22}
+                      color={on ? colors.primary : colors.textMuted}
+                    />
+                    <View style={styles.counterNoteBody}>
+                      <Text style={styles.counterNoteTitle}>{strings.payments.methods[method]}</Text>
+                      <Text style={styles.summaryNote}>{strings.payments.hints[method]}</Text>
+                      {on && method === 'transfer' && selectedStore?.transfer_info ? (
+                        <Text style={styles.transferInfo} selectable>
+                          {strings.payments.transferData}: {selectedStore.transfer_info}
+                        </Text>
+                      ) : null}
+                    </View>
+                    <Ionicons
+                      name={on ? 'radio-button-on' : 'radio-button-off'}
+                      size={22}
+                      color={on ? colors.primary : colors.border}
+                    />
+                  </Pressable>
+                );
+              })}
             </View>
           ) : null}
         </View>
@@ -573,8 +617,7 @@ function createStyles(colors: BrandColors) {
     counterNote: {
       flexDirection: 'row',
       gap: spacing.sm,
-      alignItems: 'flex-start',
-      marginTop: spacing.sm,
+      alignItems: 'center',
       padding: spacing.md,
       borderRadius: radius.md,
       backgroundColor: colors.surface,
@@ -582,6 +625,9 @@ function createStyles(colors: BrandColors) {
       borderColor: colors.border,
     },
     counterNoteBody: { flex: 1, minWidth: 0, gap: 2 },
+    payBlock: { gap: spacing.sm, marginTop: spacing.sm },
+    payOn: { borderColor: colors.primary, borderWidth: 2 },
+    transferInfo: { color: colors.text, fontSize: typography.label.fontSize, fontWeight: '600', marginTop: 4 },
     counterNoteTitle: { color: colors.text, fontSize: typography.body.fontSize, fontWeight: '800' },
 
     failure: {

@@ -67,8 +67,27 @@ teléfono, como una pantalla más).
   a `set_order_status`, que valida la transición en la base.
 - **Menú**: categorías (crear, renombrar, ordenar, eliminar) y productos.
   El interruptor de cada fila marca un producto como agotado al momento.
-- **Negocio**: datos de la sucursal, horario por día, pausar pedidos, logo
-  y colores.
+- **Historias**: fotos o videos cortos (hasta 50 MB) que salen arriba en la
+  pantalla de inicio, como en Instagram. Duran 24 h, 3 días, 7 días o quedan
+  *destacadas* (no caducan). Se pueden ligar a un producto: el cliente ve
+  el botón *Pedir*. Migración `0022_historias.sql`.
+- **Estadísticas**: ventas, pedidos, ticket promedio, clientes, ventas por
+  día, lo más vendido, lo más consultado y las historias más vistas (7, 30 o
+  90 días). Las vistas se cuentan una vez por visitante al día, sin datos
+  personales. Migración `0023_estadisticas.sql`.
+- **Negocio**: datos de la sucursal, horario por día, pausar pedidos, logo,
+  colores, **formas de pago** y **equipo**.
+  - Formas de pago (`0024_formas_pago.sql`): efectivo, tarjeta en mostrador
+    y transferencia se prenden y apagan; el cliente elige al pedir y la base
+    rechaza una forma apagada. Mercado Pago, Stripe y Clip aparecen en la
+    lista pero no se pueden activar hasta conectar la cuenta del negocio.
+  - Equipo (`0025_equipo.sql`): el dueño da acceso de **Dueño** o **Cajero**
+    a una cuenta ya registrada (por correo) y lo quita. Nadie se quita a sí
+    mismo y siempre queda al menos un dueño. Ya no hace falta SQL para esto.
+
+Menú base: `supabase/seed/viva_menu_base.sql` carga las 4 categorías y 12
+productos del menú impreso, con Tamaño (500 ml / 1 litro), Leche y "Crea el
+tuyo", más 12 historias destacadas. No duplica nada si se corre otra vez.
 
 El cliente ve los cambios de estado de su pedido sin recargar (la pantalla
 del pedido se revisa cada 20 s mientras está en curso).
@@ -106,13 +125,12 @@ la app instalada: la cámara del teléfono abre Safari, que tiene otra sesión.
 
 ## Lo que todavía no está
 
-- **Pago en línea** (Stripe o Mercado Pago). El modo `counter` queda como
-  está; para cobrar en la app hace falta la cuenta del negocio con el
-  proveedor y una Edge Function que confirme el pago por webhook, nunca
-  desde el teléfono.
-- **Extras / modificadores** (tamaño, leche, toppings) desde el panel. La
-  base y la app del cliente ya los soportan; falta la pantalla para
-  editarlos.
+- **Cobro en línea** (Mercado Pago, Stripe o Clip). Los interruptores ya
+  están; falta la cuenta del negocio con el proveedor y una Edge Function
+  que confirme el pago por webhook, nunca desde el teléfono. Las llaves
+  secretas van en los secretos de Supabase, no en este repo.
+- **Editar extras / modificadores** desde el panel. El menú base ya trae
+  Tamaño y Leche; falta la pantalla para crear grupos nuevos.
 - **Promociones** (descuentos por código o por fecha). La tabla existe; falta
   la pantalla en el panel y aplicarlas en el pedido.
 - **Escáner en el APK de Android.** Necesita `expo-camera` (dependencia

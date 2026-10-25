@@ -35,6 +35,7 @@ import { dayKey, formatSlotLabel, partsInZone } from '../../src/domain/pickup';
 import { useAsync } from '../../src/hooks/use-async';
 import { useInterval } from '../../src/hooks/use-interval';
 import { useColors } from '../../src/state/branding-context';
+import { strings } from '../../src/strings';
 import { radius, spacing, type as typography } from '../../src/theme';
 
 const LIVE_COLUMNS: readonly OrderColumn[] = ['new', 'preparing', 'ready'];
@@ -272,7 +273,11 @@ function OrderCard({
           {t.orders.total} {formatMoney(order.total_cents > 0 ? order.total_cents : order.subtotal_cents, order.currency)}
         </Text>
         {order.payment_method === 'counter' && !compact ? (
-          <Text style={styles.payTag}>{t.orders.payAtCounter}</Text>
+          <Text style={styles.payTag}>
+            {order.pay_with !== null && strings.payments.methods[order.pay_with] !== undefined
+              ? strings.payments.methods[order.pay_with]
+              : t.orders.payAtCounter}
+          </Text>
         ) : null}
       </View>
 

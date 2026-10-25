@@ -58,6 +58,8 @@ export interface OrderRow {
   payment_method: 'counter' | 'online' | null;
   customer_name: string | null;
   cancel_reason: string | null;
+  // Migracion 0024: como dijo el cliente que pagaria.
+  pay_with: string | null;
 }
 
 export interface OrderWithItems extends OrderRow {
@@ -68,7 +70,7 @@ export const ORDER_COLUMNS =
   'id, store_id, order_number, business_day, pickup_code, status, fulfillment, ' +
   'pickup_at, is_asap, customer_note, currency, idempotency_key, subtotal_cents, discount_cents, ' +
   'tax_cents, tip_cents, total_cents, created_at, ready_at, completed_at, canceled_at, ' +
-  'payment_method, customer_name, cancel_reason';
+  'payment_method, customer_name, cancel_reason, pay_with';
 
 export const ITEM_COLUMNS =
   'order_items(id, clover_item_id, name_snapshot, unit_price_snapshot_cents, quantity, ' +
@@ -211,8 +213,12 @@ export async function createPickupOrder(input: CreateOrderInput): Promise<Create
  * base. El servidor solo lo acepta en sucursales sin Clover que cobran en
  * mostrador, y lo deja directamente `confirmed`.
  */
-export async function placeCounterOrder(input: CreateOrderInput): Promise<CreatedOrder> {
+export async function placeCounterOrder(
+  input: CreateOrderInput,
+  payWith: string | null = null,
+): Promise<CreatedOrder> {
   const { data, error } = await getSupabase().rpc('place_counter_order', {
+    ...(payWith === null ? {} : { p_pay_with: payWith }),
     p_store_id: input.storeId,
     p_idempotency_key: input.idempotencyKey,
     p_pickup_at: input.pickupAt,

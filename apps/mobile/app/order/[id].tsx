@@ -212,7 +212,11 @@ export default function OrderScreen(): ReactNode {
         {order.payment_method === 'counter' &&
         order.status !== 'completed' &&
         order.status !== 'canceled' ? (
-          <Text style={styles.totalNote}>{strings.order.payAtCounter}</Text>
+          <Text style={styles.totalNote}>
+            {order.pay_with !== null && strings.payments.methods[order.pay_with] !== undefined
+              ? strings.payments.payWith(strings.payments.methods[order.pay_with] ?? '')
+              : strings.order.payAtCounter}
+          </Text>
         ) : null}
       </View>
 

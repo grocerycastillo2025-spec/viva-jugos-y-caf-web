@@ -27,7 +27,10 @@ import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { fetchFeaturedItems, fetchItemsRequiringChoice } from '../../src/api/menu';
 import { fetchStoreHours, formatClock, todayHours } from '../../src/api/store';
 import type { MenuItemRow, StoreHoursRow, StoreRow } from '../../src/api/types';
+import { fetchStories } from '../../src/api/stories';
 import { CartBar } from '../../src/components/CartBar';
+import { StoriesRow } from '../../src/components/StoriesRow';
+import { readEnv } from '../../src/env';
 import { DataState } from '../../src/components/DataState';
 import { MenuItemCard } from '../../src/components/MenuItemCard';
 import { Screen } from '../../src/components/Screen';
@@ -68,6 +71,11 @@ export default function HomeScreen(): ReactNode {
   const columns = Math.max(2, gridColumns(width));
   const { colors, displayName, logoUrl } = useBranding();
   const styles = useMemo(() => createStyles(colors), [colors]);
+
+  // Historias (0022). Van aparte del resto de Inicio: si fallan, no
+  // tumban la pantalla; simplemente no sale la fila.
+  const loadStories = useCallback(() => fetchStories(readEnv().restaurantId).catch(() => []), []);
+  const { data: stories } = useAsync(loadStories, []);
 
   const {
     selectedStore,
@@ -133,6 +141,8 @@ export default function HomeScreen(): ReactNode {
   return (
     <>
       <Screen withTabBar refreshing={refreshing} onRefresh={refresh} contentStyle={styles.content}>
+        <StoriesRow stories={stories ?? []} />
+
         <View style={styles.hero}>
           {logoUrl === null ? (
             <Text style={styles.kicker}>{displayName}</Text>
@@ -244,7 +254,10 @@ function createStyles(colors: BrandColors) {
     // asi que va centrado igual. Si no, la cabecera se movia sola segun
     // hubiera logo o no.
     kicker: {
-      color: colors.accent,
+      // Sobre el color principal: tinta legible, no el acento (que puede
+      // no contrastar, p. ej. verde sobre naranja).
+      color: colors.onPrimary,
+      opacity: 0.85,
       fontSize: typography.caption.fontSize,
       fontWeight: '800',
       letterSpacing: 1.2,

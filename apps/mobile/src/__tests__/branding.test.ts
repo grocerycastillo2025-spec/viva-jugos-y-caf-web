@@ -59,15 +59,16 @@ describe('buildColors', () => {
   });
 
   it('un color invalido en la base no rompe la app', () => {
+    // Cae a los colores de VIVA Jugos y Café (naranja, crema, verde).
     const colors = buildColors('azulito', null, undefined);
-    assert.equal(colors.primary, '#0E4A2B');
-    assert.equal(colors.background, '#F5F0E6');
-    assert.equal(colors.accent, '#E87722');
+    assert.equal(colors.primary, '#C9480F');
+    assert.equal(colors.background, '#FFF7EF');
+    assert.equal(colors.accent, '#0E5B3A');
   });
 
   it('el texto sobre primario y sobre acento siempre cumple AA', () => {
     // #7A7A7A es el caso duro: solo el negro puro llega a 4.5 sobre el.
-    for (const primary of ['#0E4A2B', '#FFF6C0', '#000000', '#FFFFFF', '#7A7A7A']) {
+    for (const primary of ['#0E4A2B', '#C9480F', '#FFF6C0', '#000000', '#FFFFFF', '#7A7A7A']) {
       const colors = buildColors(primary, '#F5F0E6', '#E87722');
       assert.ok(
         contrastRatio(colors.primary, colors.onPrimary) >= 4.5,

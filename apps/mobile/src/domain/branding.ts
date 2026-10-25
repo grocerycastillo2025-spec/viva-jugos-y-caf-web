@@ -51,11 +51,16 @@ export interface AppSettingsInput {
 
 const HEX = /^#[0-9A-Fa-f]{6}$/;
 
-/** Valores de Viva, que son tambien los del seed. Sirven de red de seguridad. */
+/**
+ * Valores de VIVA Jugos y Café, que son tambien los del seed: naranja de
+ * "Jugos naturales" (oscurecido lo justo para que el texto blanco encima
+ * pase AA, 4.75:1), crema de fondo y el verde del logotipo como acento.
+ * Sirven de red de seguridad si la base no responde.
+ */
 const FALLBACK = {
-  primary: '#0E4A2B',
-  secondary: '#F5F0E6',
-  accent: '#E87722',
+  primary: '#C9480F',
+  secondary: '#FFF7EF',
+  accent: '#0E5B3A',
 } as const;
 
 const NEUTRALS = {

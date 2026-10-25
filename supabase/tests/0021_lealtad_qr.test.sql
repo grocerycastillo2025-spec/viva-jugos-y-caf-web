@@ -114,6 +114,16 @@ begin
   insert into canje values (v);
 end $$;
 
+-- Otro cliente no puede anular el canje ajeno (lo dejaba pasar un NULL
+-- de owns_restaurant hasta la correccion de la 0023).
+reset role;
+select pg_temp.como('bbbbbbbb-0000-4000-8000-000000000004');
+select pg_temp.esperar_error(
+  $$select public.cancel_redemption((select (j ->> 'redemption_id')::uuid from canje))$$,
+  'redemption_not_found');
+reset role;
+select pg_temp.como('bbbbbbbb-0000-4000-8000-000000000003');
+
 -- El cliente no valida su propio canje.
 select pg_temp.esperar_error(
   $$select public.use_redemption((select j ->> 'code' from canje))$$, 'redemption_not_found');

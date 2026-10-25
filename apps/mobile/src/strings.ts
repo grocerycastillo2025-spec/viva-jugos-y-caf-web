@@ -364,6 +364,38 @@ export const strings = {
     failed: 'No se pudo registrar la visita',
   },
 
+  payments: {
+    choose: '¿Cómo vas a pagar?',
+    methods: {
+      cash: 'Efectivo',
+      card_counter: 'Tarjeta en mostrador',
+      transfer: 'Transferencia',
+      mercadopago: 'Mercado Pago',
+      stripe: 'Tarjeta en línea (Stripe)',
+      clip: 'Clip',
+    } as Record<string, string>,
+    hints: {
+      cash: 'Pagas al recoger.',
+      card_counter: 'Débito o crédito, al recoger.',
+      transfer: 'Transfiere y enseña el comprobante al recoger.',
+    } as Record<string, string>,
+    transferData: 'Datos para transferir',
+    payWith: (method: string): string => `Pagas con: ${method}`,
+    unavailable: 'Esa forma de pago ya no está disponible. Elige otra.',
+    none: 'Por ahora no hay formas de pago activas. Pregunta en el mostrador.',
+  },
+
+  stories: {
+    title: 'Historias',
+    open: (caption: string): string => `Ver historia ${caption}`,
+    untitled: 'Novedad',
+    empty: 'No hay historias por ahora.',
+    order: 'Pedir',
+    previous: 'Historia anterior',
+    next: 'Siguiente historia',
+    videoWebOnly: 'Este video se ve en la versión web de la app.',
+  },
+
   scanner: {
     title: 'Escanear QR',
     hint: 'Apunta al QR del mostrador.',

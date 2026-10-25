@@ -6,13 +6,21 @@
  * valida entera la semana antes de guardar.
  */
 
+import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import {
   fetchAdminHours,
   fetchAdminSettings,
+  fetchConnectedProviders,
+  updatePaymentOptions,
+  addTeamMember,
+  fetchTeam,
+  removeTeamMember,
+  type MemberRole,
+  type TeamMember,
   replaceHours,
   updateSettings,
   updateStore,
@@ -21,7 +29,7 @@ import {
 import type { AppSettingsRow, StoreHoursRow, StoreRow } from '../../src/api/types';
 import { useAdmin } from '../../src/admin/admin-context';
 import { canPickImages, pickLogo } from '../../src/admin/pick-image';
-import { adminStrings as t } from '../../src/admin/strings';
+import { adminStrings, adminStrings as t } from '../../src/admin/strings';
 import { AdminShell, Card, Field, Notice, Toggle, createAdminStyles } from '../../src/admin/ui';
 import { DataState } from '../../src/components/DataState';
 import { Button } from '../../src/components/ui';
@@ -33,19 +41,23 @@ import {
   type DayHours,
 } from '../../src/domain/admin';
 import type { BrandColors } from '../../src/domain/branding';
+import { COUNTER_METHODS, ONLINE_PROVIDERS } from '../../src/domain/payment-options';
 import { useAsync } from '../../src/hooks/use-async';
+import { strings } from '../../src/strings';
 import { useBranding, useColors } from '../../src/state/branding-context';
+import { useSession } from '../../src/state/session-context';
 import { radius, spacing, type as typography } from '../../src/theme';
 
 export default function AdminBusinessScreen(): ReactNode {
   const { store, restaurantId, isOwner } = useAdmin();
 
   const load = useCallback(async () => {
-    const [hours, settings] = await Promise.all([
+    const [hours, settings, connected] = await Promise.all([
       fetchAdminHours(store.id),
       fetchAdminSettings(restaurantId),
+      fetchConnectedProviders(store.id),
     ]);
-    return { hours, settings };
+    return { hours, settings, connected };
   }, [store.id, restaurantId]);
 
   const { data, error, loading, reload } = useAsync(load, [store.id]);
@@ -76,6 +88,8 @@ export default function AdminBusinessScreen(): ReactNode {
           <HoursCard storeId={store.id} hours={data.hours} />
         </View>
         <View style={layoutStyles.column}>
+          <TeamCard />
+          <PaymentsCard store={store} connected={data.connected} />
           {data.settings !== null ? <BrandCard settings={data.settings} restaurantId={restaurantId} /> : null}
         </View>
       </View>
@@ -392,5 +406,234 @@ function createStyles(colors: BrandColors) {
       borderColor: colors.border,
     },
     grow: { flex: 1, minWidth: 0 },
+    memberRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: spacing.md,
+      paddingVertical: spacing.sm,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+    },
+    memberAvatar: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    memberName: { color: colors.text, fontWeight: '700', fontSize: typography.body.fontSize },
+    memberActions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, marginTop: 4, alignItems: 'center' },
+    linkText: { color: colors.primary, fontWeight: '700', fontSize: typography.label.fontSize },
+    dangerText: { color: colors.danger, fontWeight: '700', fontSize: typography.label.fontSize },
+    addBox: { gap: spacing.sm, backgroundColor: colors.background, padding: spacing.md, borderRadius: radius.md },
+    roleRow: { flexDirection: 'row', gap: spacing.sm },
+    roleChip: {
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.sm,
+      borderRadius: radius.pill,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+    },
+    roleChipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+    roleChipText: { color: colors.text, fontWeight: '700', fontSize: typography.label.fontSize },
+    roleChipTextOn: { color: colors.onPrimary },
   });
+}
+
+function PaymentsCard({
+  store,
+  connected,
+}: {
+  readonly store: StoreRow;
+  readonly connected: ReadonlySet<string>;
+}): ReactNode {
+  const colors = useColors();
+  const styles = useMemo(() => ({ ...createAdminStyles(colors), ...createStyles(colors) }), [colors]);
+  const { reloadStore } = useAdmin();
+  const p = adminStrings.payments;
+  const [options, setOptions] = useState<Record<string, boolean>>(() => ({
+    cash: true,
+    card_counter: true,
+    transfer: true,
+    mercadopago: false,
+    stripe: false,
+    clip: false,
+    ...(store.payment_options ?? {}),
+  }) as Record<string, boolean>);
+  const [transfer, setTransfer] = useState(store.transfer_info ?? '');
+  const { saving, notice, run } = useSaver();
+  const anyCounter = COUNTER_METHODS.some((m) => options[m] === true);
+
+  const toggle = (key: string) => (value: boolean): void => setOptions((o) => ({ ...o, [key]: value }));
+
+  return (
+    <Card title={p.title}>
+      <Text style={styles.label}>{p.counter}</Text>
+      <Text style={styles.hint}>{p.counterHint}</Text>
+      {COUNTER_METHODS.map((m) => (
+        <Toggle key={m} label={strings.payments.methods[m] ?? m} value={options[m] === true} onValueChange={toggle(m)} />
+      ))}
+      {options.transfer === true ? (
+        <Field
+          label={p.transferInfo}
+          value={transfer}
+          onChangeText={setTransfer}
+          placeholder={p.transferPlaceholder}
+          hint={p.transferHint}
+          multiline
+        />
+      ) : null}
+      {!anyCounter ? <Notice tone="error" text={p.noneOn} /> : null}
+
+      <Text style={styles.label}>{p.online}</Text>
+      <Text style={styles.hint}>{p.onlineHint}</Text>
+      {ONLINE_PROVIDERS.map((m) => (
+        <Toggle
+          key={m}
+          label={strings.payments.methods[m] ?? m}
+          hint={connected.has(m) ? p.connected : p.notConnected}
+          value={options[m] === true}
+          onValueChange={toggle(m)}
+        />
+      ))}
+
+      {notice !== null ? <Notice tone={notice.tone} text={notice.text} /> : null}
+      <Button
+        label={saving ? adminStrings.saving : adminStrings.save}
+        busy={saving}
+        onPress={() =>
+          void run(async () => {
+            await updatePaymentOptions(store.id, options, transfer);
+            reloadStore();
+          })
+        }
+      />
+    </Card>
+  );
+}
+
+function TeamCard(): ReactNode {
+  const colors = useColors();
+  const styles = useMemo(() => ({ ...createAdminStyles(colors), ...createStyles(colors) }), [colors]);
+  const { restaurantId } = useAdmin();
+  const { user } = useSession();
+  const tm = adminStrings.team;
+  const load = useCallback(() => fetchTeam(restaurantId), [restaurantId]);
+  const { data, refresh } = useAsync(load, [restaurantId]);
+  const [email, setEmail] = useState('');
+  const [role, setRole] = useState<MemberRole>('staff');
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
+
+  const explain = (cause: unknown): string => {
+    const message = cause instanceof Error ? cause.message : String(cause);
+    const key = Object.keys(tm.errors).find((k) => message.includes(k));
+    return key === undefined ? `${adminStrings.saveFailed}: ${message}` : (tm.errors[key] ?? message);
+  };
+
+  const run = async (work: () => Promise<void>, ok: string | null): Promise<void> => {
+    setBusy(true);
+    setNotice(null);
+    try {
+      await work();
+      if (ok !== null) setNotice({ tone: 'ok', text: ok });
+      refresh();
+    } catch (cause) {
+      setNotice({ tone: 'error', text: explain(cause) });
+    } finally {
+      setBusy(false);
+      setConfirming(null);
+    }
+  };
+
+  const roleChip = (value: MemberRole, label: string): ReactNode => (
+    <Pressable
+      key={value}
+      accessibilityRole="radio"
+      accessibilityState={{ checked: role === value }}
+      onPress={() => setRole(value)}
+      style={[styles.roleChip, role === value && styles.roleChipOn]}
+    >
+      <Text style={[styles.roleChipText, role === value && styles.roleChipTextOn]}>{label}</Text>
+    </Pressable>
+  );
+
+  return (
+    <Card title={tm.title}>
+      <Text style={styles.hint}>{tm.hint}</Text>
+      {(data ?? []).map((member: TeamMember) => {
+        const me = member.user_id === user?.id;
+        const who = member.name ?? member.email;
+        return (
+          <View key={member.user_id} style={styles.memberRow}>
+            <View style={styles.memberAvatar}>
+              <Ionicons name={member.role === 'owner' ? 'key' : 'person'} size={16} color={colors.onPrimary} />
+            </View>
+            <View style={styles.grow}>
+              <Text style={styles.memberName} numberOfLines={1}>
+                {who}
+                {me ? ` (${tm.you})` : ''}
+              </Text>
+              <Text style={styles.hint} numberOfLines={1}>
+                {member.email} · {member.role === 'owner' ? tm.owner : tm.staff}
+              </Text>
+              {confirming === member.user_id ? (
+                <View style={styles.memberActions}>
+                  <Text style={styles.hint}>{tm.removeConfirm(who)}</Text>
+                  <Pressable disabled={busy} onPress={() => void run(() => removeTeamMember(restaurantId, member.user_id), null)}>
+                    <Text style={styles.dangerText}>{adminStrings.confirmDelete}</Text>
+                  </Pressable>
+                  <Pressable onPress={() => setConfirming(null)}>
+                    <Text style={styles.linkText}>{adminStrings.cancel}</Text>
+                  </Pressable>
+                </View>
+              ) : !me ? (
+                <View style={styles.memberActions}>
+                  <Pressable
+                    disabled={busy}
+                    onPress={() =>
+                      void run(
+                        () => addTeamMember(restaurantId, member.email, member.role === 'owner' ? 'staff' : 'owner'),
+                        null,
+                      )
+                    }
+                  >
+                    <Text style={styles.linkText}>{member.role === 'owner' ? tm.makeStaff : tm.makeOwner}</Text>
+                  </Pressable>
+                  <Pressable onPress={() => setConfirming(member.user_id)}>
+                    <Text style={styles.dangerText}>{tm.remove}</Text>
+                  </Pressable>
+                </View>
+              ) : null}
+            </View>
+          </View>
+        );
+      })}
+
+      <View style={styles.addBox}>
+        <Text style={styles.label}>{tm.addTitle}</Text>
+        <Text style={styles.hint}>{tm.addHint}</Text>
+        <Field label={tm.email} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
+        <View style={styles.roleRow}>
+          {roleChip('staff', tm.staff)}
+          {roleChip('owner', tm.owner)}
+        </View>
+        <Button
+          label={tm.add}
+          busy={busy}
+          disabled={!email.includes('@')}
+          onPress={() =>
+            void run(async () => {
+              await addTeamMember(restaurantId, email, role);
+              setEmail('');
+            }, tm.added)
+          }
+        />
+      </View>
+      {notice !== null ? <Notice tone={notice.tone} text={notice.text} /> : null}
+    </Card>
+  );
 }

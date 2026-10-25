@@ -55,6 +55,9 @@ export interface StoreRow {
   payments_mode?: 'simulated' | 'live' | 'counter';
   catalog_source?: 'clover' | 'own';
   currency?: string;
+  // Migracion 0024.
+  payment_options?: Partial<Record<string, boolean>>;
+  transfer_info?: string | null;
 }
 
 export interface StoreHoursRow {

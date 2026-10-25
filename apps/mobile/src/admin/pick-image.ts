@@ -22,11 +22,11 @@ export interface PickedImage {
 
 export const canPickImages = Platform.OS === 'web' && typeof document !== 'undefined';
 
-function chooseFile(): Promise<File | null> {
+function chooseFile(accept = 'image/png,image/jpeg,image/webp'): Promise<File | null> {
   return new Promise((resolve) => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = 'image/png,image/jpeg,image/webp';
+    input.accept = accept;
     input.style.display = 'none';
     input.addEventListener('change', () => {
       resolve(input.files?.[0] ?? null);
@@ -87,4 +87,32 @@ export async function pickLogo(): Promise<PickedImage | null> {
   const file = await chooseFile();
   if (file === null) return null;
   return shrink(file, 800, true);
+}
+
+export interface PickedStoryMedia extends PickedImage {
+  readonly mediaType: 'image' | 'video';
+}
+
+/**
+ * Historia: foto (se reduce a 1280 px, vertical como Instagram) o video
+ * tal cual (mp4, webm o mov hasta 50 MB). Lanza con un mensaje claro si
+ * el archivo no sirve.
+ */
+export async function pickStoryMedia(): Promise<PickedStoryMedia | null> {
+  if (!canPickImages) return null;
+  const file = await chooseFile('image/png,image/jpeg,image/webp,video/mp4,video/webm,video/quicktime');
+  if (file === null) return null;
+
+  if (file.type.startsWith('image/')) {
+    const image = await shrink(file, 1280, false);
+    return { ...image, mediaType: 'image' };
+  }
+  const extension = file.type === 'video/webm' ? 'webm' : file.type === 'video/quicktime' ? 'mov' : 'mp4';
+  if (!/^video\/(mp4|webm|quicktime)$/.test(file.type)) {
+    throw new Error('Formato no admitido. Usa una foto (JPG, PNG) o un video MP4, WEBM o MOV.');
+  }
+  if (file.size > 50 * 1024 * 1024) {
+    throw new Error('El video pesa más de 50 MB. Recórtalo o grábalo en menor calidad.');
+  }
+  return { blob: file, extension, previewUrl: URL.createObjectURL(file), mediaType: 'video' };
 }

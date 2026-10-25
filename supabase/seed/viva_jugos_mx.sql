@@ -36,9 +36,9 @@ insert into public.app_settings (
 values (
   '11111111-1111-4111-8111-111111111111',
   'VIVA Jugos y Café',
-  '#0E4A2B',
-  '#F5F0E6',
-  '#E87722',
+  '#C9480F',   -- naranja de "Jugos naturales" (texto blanco encima: AA)
+  '#FFF7EF',   -- crema de fondo
+  '#0E5B3A',   -- verde del logotipo
   jsonb_build_object(
     'loyalty', false, 'promotions', false, 'tips', false,
     'favorites', true, 'scheduling', true

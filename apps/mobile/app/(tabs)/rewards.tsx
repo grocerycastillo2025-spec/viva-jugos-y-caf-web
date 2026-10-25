@@ -218,7 +218,10 @@ function createStyles(colors: BrandColors) {
       gap: spacing.xs,
     },
     pointsLabel: {
-      color: colors.accent,
+      // Sobre el color principal: tinta legible, no el acento (que puede
+      // no contrastar, p. ej. verde sobre naranja).
+      color: colors.onPrimary,
+      opacity: 0.85,
       fontSize: typography.caption.fontSize,
       fontWeight: '800',
       letterSpacing: 1,

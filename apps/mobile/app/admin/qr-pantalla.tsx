@@ -58,7 +58,7 @@ export default function RotatingQrScreen(): ReactNode {
 
   return (
     <View style={[styles.frame, { backgroundColor: colors.primary }]}>
-      <Text style={[styles.brand, { color: colors.accent }]}>{displayName}</Text>
+      <Text style={[styles.brand, { color: colors.onPrimary }]}>{displayName}</Text>
       <Text style={[styles.title, { color: colors.onPrimary }]}>{t.screenTitle}</Text>
       <View style={styles.qrBox}>
         {url !== null ? (

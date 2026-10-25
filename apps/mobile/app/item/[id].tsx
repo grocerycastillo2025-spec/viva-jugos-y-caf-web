@@ -15,6 +15,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+
+import { trackEvent } from '../../src/analytics/track';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { fetchItemModifierGroups, fetchMenuItem } from '../../src/api/menu';
@@ -83,6 +85,11 @@ export default function ItemDetailScreen(): ReactNode {
   const groups = useMemo(() => data?.groups ?? [], [data]);
 
   // Preseleccion en cuanto llegan los grupos reales.
+  // Consulta del producto (0023): una vez por visitante y dia en la base.
+  useEffect(() => {
+    if (typeof id === 'string' && id !== '') trackEvent('item_view', id);
+  }, [id]);
+
   useEffect(() => {
     if (data !== null) setSelection(defaultSelection(data.groups));
   }, [data]);
