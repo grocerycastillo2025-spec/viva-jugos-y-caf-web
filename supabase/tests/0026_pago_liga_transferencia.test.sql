@@ -94,6 +94,12 @@ update public.stores
        mercadopago_link = 'https://link.mercadopago.com.mx/vivajugos'
  where id = '33333333-3333-4333-8333-333333333333';
 
+-- 0027: las ligas cortas mpago.mx también se aceptan.
+update public.stores set mercadopago_link = 'https://mpago.mx/1a2B3c'
+ where id = '33333333-3333-4333-8333-333333333333';
+update public.stores set mercadopago_link = 'https://link.mercadopago.com.mx/vivajugos'
+ where id = '33333333-3333-4333-8333-333333333333';
+
 -- El público ve los datos para pagar.
 select pg_temp.como(null);
 do $$ begin

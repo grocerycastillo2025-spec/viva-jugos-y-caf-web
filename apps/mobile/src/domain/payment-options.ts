@@ -90,7 +90,7 @@ export function formatClabe(input: string): string {
   return `${c.slice(0, 3)} ${c.slice(3, 6)} ${c.slice(6, 17)} ${c.slice(17)}`;
 }
 
-const MP_LINK = /^https:\/\/(link\.mercadopago\.com\.mx|www\.mercadopago\.com\.mx|mpago\.la|mpago\.li)\/\S+$/;
+const MP_LINK = /^https:\/\/(link\.mercadopago\.com\.mx|www\.mercadopago\.com\.mx|mpago\.mx|mpago\.la|mpago\.li)\/\S+$/;
 
 /** Liga de cobro de Mercado Pago México (mismos dominios que la base). */
 export function isMercadoPagoLink(input: string): boolean {

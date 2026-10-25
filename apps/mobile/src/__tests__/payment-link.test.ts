@@ -24,6 +24,7 @@ describe('Mercado Pago con liga y transferencia', () => {
   it('liga de Mercado Pago', () => {
     assert.equal(isMercadoPagoLink('https://link.mercadopago.com.mx/vivajugos'), true);
     assert.equal(isMercadoPagoLink('https://mpago.la/2abcD'), true);
+    assert.equal(isMercadoPagoLink('https://mpago.mx/1a2B3c'), true);
     assert.equal(isMercadoPagoLink('http://mpago.la/2abcD'), false);
     assert.equal(isMercadoPagoLink('https://mercadopago.com.mx.estafa.com/x'), false);
     assert.equal(isMercadoPagoLink('https://link.mercadopago.com.mx/'), false);

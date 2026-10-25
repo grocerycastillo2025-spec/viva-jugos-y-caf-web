@@ -268,13 +268,13 @@ export const adminStrings = {
     mpLink: 'Tu liga de cobro de Mercado Pago',
     mpLinkPlaceholder: 'https://link.mercadopago.com.mx/…',
     mpHelp:
-      'Cómo obtenerla: en la app de Mercado Pago entra a Cobrar → Link de pago, créala y cópiala aquí. ' +
-      'El cliente la abre desde su pedido y ve el monto que tiene que pagar.',
+      'En la app de Mercado Pago: Cobrar → Link de pago. Ojo: cada liga lleva un monto fijo, así que solo ' +
+      'sirve si cobras siempre lo mismo. Para cobrar el total exacto de cada pedido usaremos el cobro automático.',
     mpNoAccount: '¿Aún no tienes cuenta? Créala gratis en mercadopago.com.mx; mientras, deja esto apagado.',
     problems: {
       clabe_invalid: 'La CLABE no es válida. Revisa los 18 dígitos.',
       transfer_without_data: 'Para aceptar transferencias escribe la CLABE (o una nota con los datos).',
-      mp_link_invalid: 'Esa liga no es de Mercado Pago. Debe empezar con https://link.mercadopago.com.mx/ o https://mpago.la/',
+      mp_link_invalid: 'Esa liga no es de Mercado Pago. Debe empezar con https://mpago.mx/, https://mpago.la/ o https://link.mercadopago.com.mx/',
       mp_without_link: 'Para aceptar Mercado Pago pega tu liga de cobro.',
       none_on: 'Prende al menos una forma de pago o los clientes no podrán pedir.',
     } as Record<string, string>,
