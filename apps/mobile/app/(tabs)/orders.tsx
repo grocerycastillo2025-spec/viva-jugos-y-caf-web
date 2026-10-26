@@ -11,7 +11,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { fetchCatalogSnapshot } from '../../src/api/menu';
 import { fetchMyOrders, type OrderWithItems } from '../../src/api/orders';
@@ -28,6 +28,7 @@ import { useColors } from '../../src/state/branding-context';
 import { useCart } from '../../src/state/cart-context';
 import { useSession } from '../../src/state/session-context';
 import { useStores } from '../../src/state/store-context';
+import { showAlert } from '../../src/components/show-alert';
 import { strings } from '../../src/strings';
 import { radius, spacing, type as typography } from '../../src/theme';
 
@@ -67,7 +68,7 @@ export default function OrdersScreen(): ReactNode {
         const result = revalidateCart(rebuilt, snapshot);
 
         if (result.cart.lines.length === 0) {
-          Alert.alert(strings.orders.title, strings.storePicker.notOnMenu);
+          showAlert(strings.orders.title, strings.storePicker.notOnMenu);
           return;
         }
 
@@ -82,14 +83,14 @@ export default function OrdersScreen(): ReactNode {
                 : `${issue.itemName}: ${formatMoney(issue.beforeCents ?? 0)} → ${formatMoney(issue.afterCents ?? 0)}`,
             )
             .join('\n');
-          Alert.alert(strings.storePicker.reviewTitle, changed);
+          showAlert(strings.storePicker.reviewTitle, changed);
         } else {
-          Alert.alert(strings.order.reorder, strings.order.reorderAdded);
+          showAlert(strings.order.reorder, strings.order.reorderAdded);
         }
 
         router.push('/cart');
       } catch (cause) {
-        Alert.alert(strings.orders.title, cause instanceof Error ? cause.message : String(cause));
+        showAlert(strings.orders.title, cause instanceof Error ? cause.message : String(cause));
       } finally {
         setReordering(null);
       }
@@ -152,7 +153,8 @@ export default function OrdersScreen(): ReactNode {
             <Text style={styles.cardNumber}>{strings.order.number(order.order_number)}</Text>
             <Text style={styles.cardStatus}>{strings.order.status[order.status]}</Text>
             <Text style={styles.cardMeta}>
-              {strings.orders.itemsCount(units)} · {new Date(order.created_at).toLocaleDateString(moneyDefaults().locale)}
+              {strings.orders.itemsCount(units)} ·{' '}
+              {new Date(order.created_at).toLocaleDateString(moneyDefaults().locale)}
             </Text>
           </View>
           <View style={styles.cardSide}>

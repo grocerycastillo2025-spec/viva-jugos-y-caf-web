@@ -8,7 +8,7 @@
 
 import { useCallback, useMemo, type ReactNode } from 'react';
 import { useRouter } from 'expo-router';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { fetchProfile } from '../../src/api/account';
 import { fetchMembership, type Membership } from '../../src/api/admin';
@@ -28,6 +28,7 @@ import { usePush } from '../../src/state/push-context';
 import { useSession } from '../../src/state/session-context';
 import { useStores } from '../../src/state/store-context';
 import { radius, spacing, type as typography } from '../../src/theme';
+import { showAlert } from '../../src/components/show-alert';
 import { strings } from '../../src/strings';
 
 function personName(profile: ProfileRow | null, email: string | undefined): string {
@@ -64,7 +65,7 @@ export default function ProfileScreen(): ReactNode {
 
   const onSignOut = useCallback(() => {
     void signOut().catch((cause: unknown) => {
-      Alert.alert('Error', cause instanceof Error ? cause.message : String(cause));
+      showAlert('Error', cause instanceof Error ? cause.message : String(cause));
     });
   }, [signOut]);
 

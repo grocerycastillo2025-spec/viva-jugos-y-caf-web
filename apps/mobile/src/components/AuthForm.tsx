@@ -6,7 +6,10 @@
  */
 
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
-import { Alert, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+
+import { authErrorKey } from '../domain/auth-errors';
+import { getSupabase } from '../supabase';
 
 import type { BrandColors } from '../domain/branding';
 import { useColors } from '../state/branding-context';
@@ -34,9 +37,40 @@ export function AuthForm({
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [googleBusy, setGoogleBusy] = useState(false);
+  // En pantalla, no en Alert: Alert.alert no se ve en la web.
+  const [feedback, setFeedback] = useState<{
+    tone: 'ok' | 'error';
+    text: string;
+    resend: boolean;
+  } | null>(null);
+
+  const explain = (cause: unknown): { text: string; resend: boolean } => {
+    const raw = cause instanceof Error ? cause.message : String(cause);
+    const key = authErrorKey(raw);
+    const text =
+      key === 'other'
+        ? `${strings.auth.errors['other'] ?? ''} (${raw})`
+        : (strings.auth.errors[key] ?? raw);
+    return { text, resend: key === 'email_not_confirmed' };
+  };
+
+  const resend = useCallback(async () => {
+    setBusy(true);
+    try {
+      const { error } = await getSupabase().auth.resend({ type: 'signup', email: email.trim() });
+      if (error) throw new Error(error.message);
+      setFeedback({ tone: 'ok', text: strings.auth.resent, resend: false });
+    } catch (cause) {
+      setFeedback({ tone: 'error', ...explain(cause) });
+    } finally {
+      setBusy(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [email]);
 
   const submit = useCallback(async () => {
     setBusy(true);
+    setFeedback(null);
     try {
       if (mode === 'signin') {
         await signIn(email, password);
@@ -45,19 +79,18 @@ export function AuthForm({
         const needsConfirmation = await signUp(email, password, firstName);
         setPassword('');
         if (needsConfirmation) {
-          Alert.alert(strings.auth.checkYourEmail, strings.auth.checkYourEmailBody);
+          setFeedback({ tone: 'ok', text: strings.auth.confirmSent(email.trim()), resend: true });
+          setMode('signin');
         } else {
           onSignedIn?.();
         }
       }
     } catch (cause) {
-      Alert.alert(
-        mode === 'signin' ? strings.auth.signInFailed : strings.auth.signUpFailed,
-        cause instanceof Error ? cause.message : String(cause),
-      );
+      setFeedback({ tone: 'error', ...explain(cause) });
     } finally {
       setBusy(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [email, firstName, mode, onSignedIn, password, signIn, signUp]);
 
   const google = useCallback(async () => {
@@ -66,10 +99,7 @@ export function AuthForm({
       await signInWithGoogle();
       onSignedIn?.();
     } catch (cause) {
-      Alert.alert(
-        strings.auth.signInFailed,
-        cause instanceof Error ? cause.message : String(cause),
-      );
+      setFeedback({ tone: 'error', ...explain(cause) });
     } finally {
       setGoogleBusy(false);
     }
@@ -129,6 +159,22 @@ export function AuthForm({
         style={styles.input}
       />
 
+      {feedback !== null ? (
+        <View
+          style={[
+            styles.feedback,
+            feedback.tone === 'ok' ? styles.feedbackOk : styles.feedbackError,
+          ]}
+        >
+          <Text style={styles.feedbackText}>{feedback.text}</Text>
+          {feedback.resend && email.includes('@') ? (
+            <Pressable accessibilityRole="button" onPress={() => void resend()} disabled={busy}>
+              <Text style={styles.feedbackLink}>{strings.auth.resend}</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
+
       <Button
         label={mode === 'signin' ? strings.auth.signIn : strings.auth.signUp}
         onPress={() => void submit()}
@@ -139,7 +185,10 @@ export function AuthForm({
       <Button
         label={mode === 'signin' ? strings.auth.noAccount : strings.auth.haveAccount}
         variant="outline"
-        onPress={() => setMode(mode === 'signin' ? 'signup' : 'signin')}
+        onPress={() => {
+          setFeedback(null);
+          setMode(mode === 'signin' ? 'signup' : 'signin');
+        }}
       />
     </View>
   );
@@ -147,6 +196,11 @@ export function AuthForm({
 
 function createStyles(colors: BrandColors) {
   return StyleSheet.create({
+    feedback: { gap: spacing.sm, padding: spacing.md, borderRadius: radius.md, borderWidth: 1 },
+    feedbackOk: { borderColor: colors.success, backgroundColor: '#EEF7F1' },
+    feedbackError: { borderColor: colors.danger, backgroundColor: '#FDEFEE' },
+    feedbackText: { color: colors.text, fontSize: typography.label.fontSize, lineHeight: 20 },
+    feedbackLink: { color: colors.primary, fontSize: typography.label.fontSize, fontWeight: '800' },
     card: {
       backgroundColor: colors.surface,
       borderRadius: radius.lg,
