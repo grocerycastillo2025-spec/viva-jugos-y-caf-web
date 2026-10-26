@@ -11,6 +11,7 @@
  */
 
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Platform,
@@ -79,6 +80,7 @@ function chime(): void {
 export default function AdminOrdersScreen(): ReactNode {
   const colors = useColors();
   const admin = useAdminStyles(colors);
+  const router = useRouter();
   const { store } = useAdmin();
   const { width } = useWindowDimensions();
   const sideBySide = width >= 900;
@@ -163,7 +165,18 @@ export default function AdminOrdersScreen(): ReactNode {
     updatedAt === null ? '' : formatSlotLabel(updatedAt.getHours() * 60 + updatedAt.getMinutes());
 
   return (
-    <AdminShell>
+    <AdminShell
+      actions={
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push('/admin/cliente')}
+          style={admin.scanButton}
+        >
+          <Ionicons name="qr-code-outline" size={18} color={colors.onPrimary} />
+          <Text style={admin.scanButtonText}>{t.loyalty.scanCustomer}</Text>
+        </Pressable>
+      }
+    >
       {banner !== null ? (
         <Pressable onPress={() => setBanner(null)} style={admin.banner}>
           <Ionicons name="notifications" size={20} color={colors.onAccent} />
@@ -432,6 +445,23 @@ function useAdminStyles(colors: BrandColors) {
 
 function createStyles(colors: BrandColors) {
   return StyleSheet.create({
+    scanButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginLeft: spacing.sm,
+      marginBottom: 6,
+      paddingHorizontal: spacing.md,
+      paddingVertical: 8,
+      borderRadius: radius.pill,
+      borderWidth: 1.5,
+      borderColor: colors.onPrimary,
+    },
+    scanButtonText: {
+      color: colors.onPrimary,
+      fontWeight: '800',
+      fontSize: typography.label.fontSize,
+    },
     banner: {
       flexDirection: 'row',
       alignItems: 'center',

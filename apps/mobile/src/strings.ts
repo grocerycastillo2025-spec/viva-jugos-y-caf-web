@@ -325,7 +325,7 @@ export const strings = {
     earnRate: (perDollar: number, minRedeem: number): string =>
       `Ganas ${perDollar} punto(s) por cada peso. Necesitas ${minRedeem} para canjear.`,
     perVisit: (points: number): string =>
-      `Ganas ${points} puntos en cada visita: escanea el QR del mostrador con la app.`,
+      `Ganas ${points} puntos en cada visita: enséñale tu QR al cajero.`,
     scan: 'Escanear QR del local',
     catalog: 'Recompensas',
     empty: 'Todavía no hay recompensas.',
@@ -342,6 +342,15 @@ export const strings = {
     cancelRedemption: 'Cancelar y recuperar mis puntos',
     used: 'Entregado',
     footnote: 'Los puntos son personales y no se pueden transferir.',
+    myCard: 'Mi tarjeta',
+    myCardHint: 'Enséñale este QR al cajero para sumar tu visita o recibir tu recompensa.',
+    qrRefresh: (seconds: number): string => `Se renueva en ${seconds} s`,
+    qrError: 'No se pudo mostrar tu QR. Revisa tu internet.',
+    ready: (reward: string): string => `¡Ya juntaste para: ${reward}!`,
+    readyHint: 'Enséñale tu QR al cajero y te la entrega.',
+    goal: (missing: number, reward: string): string => `Te faltan ${missing} pts para ${reward}`,
+    askCashier: 'Pídela en el mostrador',
+    orScan: 'O escanea el QR del local',
   },
 
   visit: {

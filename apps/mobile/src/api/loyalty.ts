@@ -196,3 +196,75 @@ export async function fetchRecentRedemptions(restaurantId: string): Promise<Admi
   fail(error);
   return data ?? [];
 }
+
+// ---------------------------------------------------------------------
+// LA TIENDA ESCANEA EL QR DEL CLIENTE (0029)
+// ---------------------------------------------------------------------
+
+export interface MyLoyaltyQr {
+  readonly payload: string;
+  readonly expires_at: string;
+  readonly name?: string | null;
+}
+
+/** El QR personal del cliente; cambia cada 2 minutos. */
+export function fetchMyLoyaltyQr(): Promise<MyLoyaltyQr> {
+  return rpc('my_loyalty_qr', {});
+}
+
+export interface CardReward {
+  readonly id: string;
+  readonly name: string;
+  readonly cost_points: number;
+  readonly eligible: boolean;
+}
+
+export interface CustomerCard {
+  readonly user_id: string;
+  readonly name: string;
+  readonly email: string | null;
+  readonly points: number;
+  readonly lifetime_points: number;
+  readonly program_enabled: boolean;
+  readonly points_per_visit: number;
+  readonly last_visit_at: string | null;
+  readonly next_visit_at: string | null;
+  readonly can_visit: boolean;
+  readonly rewards: readonly CardReward[];
+  readonly added?: number;
+  readonly given?: string;
+}
+
+export function staffScanCustomer(storeId: string, payload: string): Promise<CustomerCard> {
+  return rpc('staff_scan_customer', { p_store_id: storeId, p_payload: payload });
+}
+
+export function staffAddVisit(storeId: string, payload: string): Promise<CustomerCard> {
+  return rpc('staff_add_visit', { p_store_id: storeId, p_payload: payload });
+}
+
+export function staffGiveReward(storeId: string, payload: string, rewardId: string): Promise<CustomerCard> {
+  return rpc('staff_give_reward', { p_store_id: storeId, p_payload: payload, p_reward_id: rewardId });
+}
+
+export interface GivenReward {
+  readonly id: string;
+  readonly reward_name: string;
+  readonly points_cost: number;
+  readonly status: 'issued' | 'used' | 'canceled';
+  readonly code: string | null;
+  readonly redeemed_at: string;
+  readonly used_at: string | null;
+  readonly customer_name: string | null;
+  readonly customer_email: string | null;
+  readonly staff_name: string | null;
+}
+
+/** Recompensas entregadas: quién, qué, cuándo y qué cajero. */
+export async function fetchGivenRewards(restaurantId: string): Promise<GivenReward[]> {
+  const { data, error } = await getSupabase().rpc('given_rewards', { p_restaurant_id: restaurantId, p_limit: 50 });
+  // Base sin la 0029: se cae a la lista anterior en quien la llame.
+  if (error?.code === 'PGRST202' || error?.code === '42883') throw dataError('needs_0029', error.code);
+  fail(error);
+  return (data ?? []) as GivenReward[];
+}

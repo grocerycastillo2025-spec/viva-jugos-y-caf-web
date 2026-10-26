@@ -19,9 +19,11 @@ import {
 } from '../../src/api/loyalty';
 import type { LoyaltyAccountRow, LoyaltyProgramRow, RewardRow } from '../../src/api/types';
 import { DataState } from '../../src/components/DataState';
+import { MyLoyaltyCard } from '../../src/components/MyLoyaltyCard';
 import { Screen } from '../../src/components/Screen';
 import { Button, SectionTitle } from '../../src/components/ui';
 import type { BrandColors } from '../../src/domain/branding';
+import { nextGoal, reachableRewards } from '../../src/domain/loyalty-card';
 import { parseRedeemError, pointsMissing } from '../../src/domain/visit';
 import { useAsync } from '../../src/hooks/use-async';
 import { useBranding, useColors } from '../../src/state/branding-context';
@@ -37,6 +39,10 @@ interface RewardsData {
   readonly redemptions: readonly RedemptionRow[];
 }
 
+function displayNameFor(email: string): string {
+  return email.split('@')[0] ?? '';
+}
+
 export default function RewardsScreen(): ReactNode {
   const { user } = useSession();
   const router = useRouter();
@@ -48,7 +54,8 @@ export default function RewardsScreen(): ReactNode {
   const restaurantId = selectedStore?.restaurant_id ?? null;
 
   const load = useCallback(async (): Promise<RewardsData> => {
-    if (restaurantId === null) return { program: null, account: null, rewards: [], redemptions: [] };
+    if (restaurantId === null)
+      return { program: null, account: null, rewards: [], redemptions: [] };
     const [program, rewards, account, redemptions] = await Promise.all([
       fetchLoyaltyProgram(restaurantId),
       fetchRewards(restaurantId),
@@ -58,7 +65,10 @@ export default function RewardsScreen(): ReactNode {
     return { program, account, rewards, redemptions };
   }, [restaurantId, user]);
 
-  const { data, error, loading, refreshing, refresh, reload } = useAsync(load, [restaurantId, user?.id]);
+  const { data, error, loading, refreshing, refresh, reload } = useAsync(load, [
+    restaurantId,
+    user?.id,
+  ]);
 
   const [confirming, setConfirming] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -91,7 +101,9 @@ export default function RewardsScreen(): ReactNode {
       await cancelRedemption(redemption.id);
       refresh();
     } catch (cause) {
-      setFailure(`${strings.rewards.redeemFailed}: ${cause instanceof Error ? cause.message : String(cause)}`);
+      setFailure(
+        `${strings.rewards.redeemFailed}: ${cause instanceof Error ? cause.message : String(cause)}`,
+      );
     } finally {
       setBusy(false);
     }
@@ -111,6 +123,9 @@ export default function RewardsScreen(): ReactNode {
   const enabled = program !== null && program.enabled;
   const points = data?.account?.points_balance ?? 0;
   const active = (data?.redemptions ?? []).filter((r) => r.status === 'issued');
+  const catalog = data?.rewards ?? [];
+  const ready = reachableRewards(points, catalog);
+  const goal = nextGoal(points, catalog);
 
   return (
     <Screen withTabBar refreshing={refreshing} onRefresh={refresh} contentStyle={styles.content}>
@@ -126,15 +141,37 @@ export default function RewardsScreen(): ReactNode {
               ? strings.rewards.inactive(displayName)
               : strings.rewards.perVisit(program.points_per_visit ?? 0)}
         </Text>
-        {enabled ? (
-          <Button
-            label={strings.rewards.scan}
-            variant="accent"
-            onPress={() => router.push('/escanear')}
-            style={styles.scanButton}
-          />
+        {user !== null && enabled && goal !== null ? (
+          <View style={styles.goal}>
+            <View style={styles.goalTrack}>
+              <View style={[styles.goalFill, { width: `${Math.round(goal.progress * 100)}%` }]} />
+            </View>
+            <Text style={styles.goalText}>
+              {strings.rewards.goal(goal.missing, goal.reward.name)}
+            </Text>
+          </View>
         ) : null}
       </View>
+
+      {user !== null && enabled && ready.length > 0 ? (
+        <View style={styles.ready}>
+          <Text style={styles.readyTitle}>🎉 {strings.rewards.ready(ready[0]?.name ?? '')}</Text>
+          <Text style={styles.readyHint}>{strings.rewards.readyHint}</Text>
+        </View>
+      ) : null}
+
+      {user !== null && enabled ? (
+        <>
+          <MyLoyaltyCard name={displayNameFor(user.email ?? '')} />
+          <Pressable
+            onPress={() => router.push('/escanear')}
+            accessibilityRole="button"
+            style={styles.scanLink}
+          >
+            <Text style={styles.scanLinkText}>{strings.rewards.orScan}</Text>
+          </Pressable>
+        </>
+      ) : null}
 
       {active.length > 0 ? (
         <View style={styles.section}>
@@ -171,7 +208,9 @@ export default function RewardsScreen(): ReactNode {
                       <Text style={styles.rewardDescription}>{reward.description}</Text>
                     ) : null}
                   </View>
-                  <Text style={styles.rewardCost}>{strings.rewards.points(reward.cost_points)}</Text>
+                  <Text style={styles.rewardCost}>
+                    {strings.rewards.points(reward.cost_points)}
+                  </Text>
                 </View>
 
                 {confirming === reward.id ? (
@@ -180,18 +219,21 @@ export default function RewardsScreen(): ReactNode {
                       {strings.rewards.confirmRedeem(reward.name, reward.cost_points)}
                     </Text>
                     <View style={styles.confirmRow}>
-                      <Button label={strings.rewards.confirm} busy={busy} onPress={() => void redeem(reward)} />
-                      <Button label={strings.common.cancel} variant="outline" onPress={() => setConfirming(null)} />
+                      <Button
+                        label={strings.rewards.confirm}
+                        busy={busy}
+                        onPress={() => void redeem(reward)}
+                      />
+                      <Button
+                        label={strings.common.cancel}
+                        variant="outline"
+                        onPress={() => setConfirming(null)}
+                      />
                     </View>
                   </View>
                 ) : user !== null && enabled ? (
                   canRedeem ? (
-                    <Button
-                      label={strings.rewards.redeem}
-                      variant="outline"
-                      onPress={() => setConfirming(reward.id)}
-                      style={styles.redeemButton}
-                    />
+                    <Text style={styles.askCashier}>✓ {strings.rewards.askCashier}</Text>
                   ) : (
                     <Text style={styles.missing}>{strings.rewards.missing(missing)}</Text>
                   )
@@ -228,8 +270,32 @@ function createStyles(colors: BrandColors) {
       textTransform: 'uppercase',
     },
     pointsValue: { color: colors.onPrimary, fontSize: 44, fontWeight: '800' },
-    pointsHelp: { color: colors.onPrimary, opacity: 0.85, fontSize: typography.body.fontSize, lineHeight: 21 },
-    scanButton: { marginTop: spacing.md, alignSelf: 'flex-start' },
+    pointsHelp: {
+      color: colors.onPrimary,
+      opacity: 0.85,
+      fontSize: typography.body.fontSize,
+      lineHeight: 21,
+    },
+    goal: { gap: 6, marginTop: spacing.sm },
+    goalTrack: {
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: 'rgba(255,255,255,0.3)',
+      overflow: 'hidden',
+    },
+    goalFill: { height: 8, borderRadius: 4, backgroundColor: colors.onPrimary },
+    goalText: { color: colors.onPrimary, fontSize: typography.label.fontSize, fontWeight: '700' },
+    ready: {
+      gap: 4,
+      padding: spacing.lg,
+      borderRadius: radius.lg,
+      backgroundColor: colors.success,
+    },
+    readyTitle: { color: '#FFFFFF', fontSize: typography.section.fontSize, fontWeight: '800' },
+    readyHint: { color: '#FFFFFF', fontSize: typography.label.fontSize, opacity: 0.95 },
+    scanLink: { alignSelf: 'center', padding: spacing.sm },
+    scanLinkText: { color: colors.primary, fontSize: typography.label.fontSize, fontWeight: '700' },
+    askCashier: { color: colors.success, fontSize: typography.label.fontSize, fontWeight: '800' },
 
     section: { gap: spacing.sm },
     empty: { color: colors.textMuted, fontSize: typography.body.fontSize },
@@ -246,7 +312,12 @@ function createStyles(colors: BrandColors) {
     codeReward: { color: colors.text, fontSize: typography.section.fontSize, fontWeight: '800' },
     code: { color: colors.primary, fontSize: 40, fontWeight: '800', letterSpacing: 6 },
     codeHint: { color: colors.textMuted, fontSize: typography.label.fontSize, textAlign: 'center' },
-    cancel: { color: colors.danger, fontSize: typography.label.fontSize, fontWeight: '700', marginTop: spacing.xs },
+    cancel: {
+      color: colors.danger,
+      fontSize: typography.label.fontSize,
+      fontWeight: '700',
+      marginTop: spacing.xs,
+    },
     failure: { color: colors.danger, fontSize: typography.label.fontSize, fontWeight: '600' },
 
     reward: {
@@ -262,7 +333,12 @@ function createStyles(colors: BrandColors) {
     rewardBody: { flex: 1, minWidth: 0, gap: 2 },
     rewardName: { color: colors.text, fontSize: typography.body.fontSize + 1, fontWeight: '700' },
     rewardDescription: { color: colors.textMuted, fontSize: typography.caption.fontSize + 1 },
-    rewardCost: { color: colors.accent, fontSize: typography.body.fontSize, fontWeight: '800', flexShrink: 0 },
+    rewardCost: {
+      color: colors.accent,
+      fontSize: typography.body.fontSize,
+      fontWeight: '800',
+      flexShrink: 0,
+    },
     redeemButton: { alignSelf: 'flex-start', minHeight: 40 },
     missing: { color: colors.textFaint, fontSize: typography.label.fontSize, fontWeight: '600' },
     confirm: { gap: spacing.sm },

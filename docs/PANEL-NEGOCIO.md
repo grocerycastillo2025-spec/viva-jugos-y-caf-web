@@ -146,6 +146,33 @@ El escáner dentro de la app usa la cámara del navegador (necesita HTTPS, que
 GitHub Pages y un dominio propio ya dan). En iPhone conviene escanear desde
 la app instalada: la cámara del teléfono abre Safari, que tiene otra sesión.
 
+## Lealtad: la tienda escanea al cliente (0029)
+
+- El cliente abre **Puntos → Mi tarjeta**: un QR personal que cambia cada
+  2 minutos (una captura vieja no sirve). Ve su avance a la siguiente
+  recompensa y un aviso verde cuando ya alcanza una.
+- El cajero toca **Escanear cliente** (en Pedidos o en Lealtad), apunta la
+  cámara y ve nombre y puntos. **Sumar visita** respeta las horas entre
+  visitas. Si ya alcanza, sale *"¡Fulano ya puede canjear…!"* y
+  **Entregar** descuenta los puntos.
+- **Recompensas entregadas** (Lealtad) muestra quién, qué, cuándo y qué
+  cajero la dio (`given_rewards`).
+- El QR del local (0021) sigue funcionando como alternativa.
+
+## Estadísticas v2 (0030)
+
+Frase resumen, 4 números con ▲▼ contra el periodo anterior, ventas por día
+con el mejor día, horas pico, mejor día de la semana, formas de pago (barra
+apilada con %), clientes nuevos vs. que regresan y mejores clientes
+(`business_insights`). Sin la 0030, esas secciones no se muestran.
+
+## Ubicación en el mapa
+
+Panel → Negocio → Sucursal: mapa (Leaflet + OpenStreetMap desde cdnjs) con
+pin fijo al centro como en Uber, **Buscar mi dirección** (Nominatim) y
+**Usar mi ubicación**. Guarda `latitude`/`longitude`; "Cómo llegar" usa ese
+punto.
+
 ## Lo que todavía no está
 
 - **Cobro en línea** (Mercado Pago, Stripe o Clip). Los interruptores ya
