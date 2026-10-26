@@ -29,6 +29,13 @@ import { Button } from '../../../src/components/ui';
 import { parsePriceInput, priceToInput } from '../../../src/domain/admin';
 import type { BrandColors } from '../../../src/domain/branding';
 import { useAsync } from '../../../src/hooks/use-async';
+import {
+  fetchIngredients,
+  fetchItemIngredientIds,
+  setItemIngredients,
+  type Ingredient,
+} from '../../../src/api/ingredients';
+import { toggleId } from '../../../src/domain/ingredients';
 import { useColors } from '../../../src/state/branding-context';
 import { radius, spacing, type as typography } from '../../../src/theme';
 
@@ -36,8 +43,15 @@ export default function AdminProductScreen(): ReactNode {
   const { id, category } = useLocalSearchParams<{ id: string; category?: string }>();
   const { store } = useAdmin();
 
-  const load = useCallback(() => fetchAdminCatalog(store.id), [store.id]);
-  const { data, error, loading, reload } = useAsync(load, [store.id]);
+  const load = useCallback(async () => {
+    const [catalog, ingredients, linked] = await Promise.all([
+      fetchAdminCatalog(store.id),
+      fetchIngredients(store.id).catch(() => null),
+      id === 'new' ? Promise.resolve([] as string[]) : fetchItemIngredientIds(id).catch(() => null),
+    ]);
+    return { catalog, ingredients, linked };
+  }, [store.id, id]);
+  const { data, error, loading, reload } = useAsync(load, [store.id, id]);
 
   if (data === null) {
     return (
@@ -49,30 +63,52 @@ export default function AdminProductScreen(): ReactNode {
     );
   }
 
-  return <ProductForm catalog={data} productId={id === 'new' ? null : id} initialCategory={category ?? null} />;
+  return (
+    <ProductForm
+      catalog={data.catalog}
+      ingredients={data.ingredients}
+      linked={data.linked}
+      productId={id === 'new' ? null : id}
+      initialCategory={category ?? null}
+    />
+  );
 }
 
 function ProductForm({
   catalog,
+  ingredients,
+  linked,
   productId,
   initialCategory,
 }: {
   readonly catalog: AdminCatalog;
+  readonly ingredients: Ingredient[] | null;
+  readonly linked: string[] | null;
   readonly productId: string | null;
   readonly initialCategory: string | null;
 }): ReactNode {
   const colors = useColors();
-  const styles = useMemo(() => ({ ...createAdminStyles(colors), ...createStyles(colors) }), [colors]);
+  const styles = useMemo(
+    () => ({ ...createAdminStyles(colors), ...createStyles(colors) }),
+    [colors],
+  );
   const router = useRouter();
   const { store } = useAdmin();
 
-  const existing = productId === null ? undefined : catalog.products.find((p) => p.id === productId);
+  const existing =
+    productId === null ? undefined : catalog.products.find((p) => p.id === productId);
   const categories = catalog.categories;
 
   const [name, setName] = useState(existing?.name ?? '');
-  const [price, setPrice] = useState(existing === undefined ? '' : priceToInput(existing.price_cents));
+  const [ingredientIds, setIngredientIds] = useState<string[]>(linked ?? []);
+  const [price, setPrice] = useState(
+    existing === undefined ? '' : priceToInput(existing.price_cents),
+  );
   const [categoryId, setCategoryId] = useState<string | null>(
-    existing?.category_id ?? (initialCategory !== null && initialCategory !== '' ? initialCategory : (categories[0]?.id ?? null)),
+    existing?.category_id ??
+      (initialCategory !== null && initialCategory !== ''
+        ? initialCategory
+        : (categories[0]?.id ?? null)),
   );
   const [description, setDescription] = useState(existing?.description ?? '');
   const [imageUrl, setImageUrl] = useState<string | null>(existing?.image_url ?? null);
@@ -100,7 +136,11 @@ function ProductForm({
     return (
       <AdminShell>
         <Notice tone="error" text={t.product.notFound} />
-        <Button label={t.tabs.menu} variant="outline" onPress={() => router.replace('/admin/menu')} />
+        <Button
+          label={t.tabs.menu}
+          variant="outline"
+          onPress={() => router.replace('/admin/menu')}
+        />
       </AdminShell>
     );
   }
@@ -120,7 +160,9 @@ function ProductForm({
       setImageUrl(url);
     } catch (cause) {
       setPreview(null);
-      setFailure(`${t.product.photoFailed}: ${cause instanceof Error ? cause.message : String(cause)}`);
+      setFailure(
+        `${t.product.photoFailed}: ${cause instanceof Error ? cause.message : String(cause)}`,
+      );
     } finally {
       setUploading(false);
     }
@@ -132,8 +174,10 @@ function ProductForm({
     setSaving(true);
     setFailure(null);
     try {
-      await saveProduct(store.id, {
-        ...(existing !== undefined ? { id: existing.id, clover_item_id: existing.clover_item_id } : {}),
+      const savedId = await saveProduct(store.id, {
+        ...(existing !== undefined
+          ? { id: existing.id, clover_item_id: existing.clover_item_id }
+          : {}),
         category_id: categoryId,
         name,
         price_cents: priceCents,
@@ -144,6 +188,8 @@ function ProductForm({
         badge,
         sort_order: Number.parseInt(order, 10) || 0,
       });
+      // Base con la 0031: se guardan también sus ingredientes.
+      if (ingredients !== null && linked !== null) await setItemIngredients(savedId, ingredientIds);
       router.replace('/admin/menu');
     } catch (cause) {
       setFailure(`${t.saveFailed}: ${cause instanceof Error ? cause.message : String(cause)}`);
@@ -167,12 +213,18 @@ function ProductForm({
 
   return (
     <AdminShell>
-      <Pressable accessibilityRole="link" onPress={() => router.replace('/admin/menu')} style={styles.back}>
+      <Pressable
+        accessibilityRole="link"
+        onPress={() => router.replace('/admin/menu')}
+        style={styles.back}
+      >
         <Ionicons name="arrow-back" size={18} color={colors.primary} />
         <Text style={styles.backText}>{t.tabs.menu}</Text>
       </Pressable>
 
-      <Text style={styles.heading}>{existing === undefined ? t.product.titleNew : t.product.titleEdit}</Text>
+      <Text style={styles.heading}>
+        {existing === undefined ? t.product.titleNew : t.product.titleEdit}
+      </Text>
 
       <View style={styles.layout}>
         <View style={styles.main}>
@@ -212,7 +264,9 @@ function ProductForm({
                     onPress={() => setCategoryId(c.id)}
                     style={[styles.chip, categoryId === c.id && styles.chipOn]}
                   >
-                    <Text style={[styles.chipText, categoryId === c.id && styles.chipTextOn]}>{c.name}</Text>
+                    <Text style={[styles.chipText, categoryId === c.id && styles.chipTextOn]}>
+                      {c.name}
+                    </Text>
                   </Pressable>
                 ))}
                 <Pressable
@@ -228,6 +282,31 @@ function ProductForm({
               </View>
             </View>
           </Card>
+
+          {ingredients !== null && linked !== null && ingredients.length > 0 ? (
+            <Card title={t.ingredients.productTitle}>
+              <Text style={styles.hint}>{t.ingredients.productHint}</Text>
+              <View style={styles.ingChips}>
+                {ingredients.map((ing) => {
+                  const on = ingredientIds.includes(ing.id);
+                  return (
+                    <Pressable
+                      key={ing.id}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: on }}
+                      onPress={() => setIngredientIds((ids) => toggleId(ids, ing.id))}
+                      style={[styles.ingChip, on && styles.ingChipOn]}
+                    >
+                      <Text style={[styles.ingChipText, on && styles.ingChipTextOn]}>
+                        {on ? '✓ ' : ''}
+                        {ing.name}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </Card>
+          ) : null}
 
           <Card>
             <Toggle
@@ -331,6 +410,18 @@ function ProductForm({
 
 function createStyles(colors: BrandColors) {
   return StyleSheet.create({
+    ingChips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
+    ingChip: {
+      paddingHorizontal: spacing.md,
+      paddingVertical: 6,
+      borderRadius: radius.pill,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+    },
+    ingChipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+    ingChipText: { color: colors.text, fontSize: typography.label.fontSize, fontWeight: '600' },
+    ingChipTextOn: { color: colors.onPrimary },
     back: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' },
     backText: { color: colors.primary, fontWeight: '700', fontSize: typography.label.fontSize + 1 },
     heading: { color: colors.text, fontSize: typography.title.fontSize, fontWeight: '800' },

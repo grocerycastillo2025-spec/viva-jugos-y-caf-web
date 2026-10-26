@@ -25,6 +25,7 @@ import {
   type AdminProduct,
 } from '../../src/api/admin';
 import { useAdmin } from '../../src/admin/admin-context';
+import { IngredientsCard } from '../../src/admin/IngredientsCard';
 import { adminStrings as t } from '../../src/admin/strings';
 import { AdminShell, Card, IconButton, Notice, createAdminStyles } from '../../src/admin/ui';
 import { DataState } from '../../src/components/DataState';
@@ -125,6 +126,8 @@ export default function AdminMenuScreen(): ReactNode {
   return (
     <AdminShell>
       {failure !== null ? <Notice tone="error" text={failure} /> : null}
+
+      <IngredientsCard storeId={store.id} onChanged={refresh} />
 
       <Card title={t.menu.newCategory}>
         <View style={styles.inlineForm}>

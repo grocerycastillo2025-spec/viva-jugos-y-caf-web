@@ -45,7 +45,8 @@ export const adminStrings = {
       done: 'Cerrados hoy',
     },
     emptyTitle: 'Sin pedidos por ahora',
-    emptyBody: 'Los pedidos nuevos aparecen aquí solos. Esta pantalla se actualiza cada 15 segundos.',
+    emptyBody:
+      'Los pedidos nuevos aparecen aquí solos. Esta pantalla se actualiza cada 15 segundos.',
     newArrived: (n: number): string => (n === 1 ? '¡Pedido nuevo!' : `¡${n} pedidos nuevos!`),
     number: (n: number): string => `#${n}`,
     code: (code: string): string => `Código ${code}`,
@@ -142,7 +143,8 @@ export const adminStrings = {
     alreadyUsed: (when: string): string => `Ese canje ya se entregó (${when}).`,
     canceled: 'Ese canje fue cancelado por el cliente.',
     scanCustomer: 'Escanear cliente',
-    scanCustomerHint: 'Escanea el QR de "Mi tarjeta" en la app del cliente para sumar su visita o entregarle una recompensa.',
+    scanCustomerHint:
+      'Escanea el QR de "Mi tarjeta" en la app del cliente para sumar su visita o entregarle una recompensa.',
     scanTitle: 'Escanear cliente',
     scanHint: 'Apunta al QR de "Mi tarjeta" en el teléfono del cliente.',
     notCustomerQr: 'Ese no es el QR de un cliente. Pídele que abra Puntos → Mi tarjeta.',
@@ -153,10 +155,13 @@ export const adminStrings = {
     alreadyVisited: (when: string): string => `Ya sumó su visita. Puede volver a sumar: ${when}`,
     canRedeem: (name: string, reward: string): string => `¡${name} ya puede canjear: ${reward}!`,
     give: (reward: string): string => `Entregar ${reward}`,
-    given: (reward: string, name: string): string => `Entregado: ${reward} a ${name}. Sus puntos se descontaron.`,
-    confirmGive: (reward: string, cost: number): string => `¿Entregar ${reward}? Se descuentan ${cost} pts.`,
+    given: (reward: string, name: string): string =>
+      `Entregado: ${reward} a ${name}. Sus puntos se descontaron.`,
+    confirmGive: (reward: string, cost: number): string =>
+      `¿Entregar ${reward}? Se descuentan ${cost} pts.`,
     yesGive: 'Sí, entregar',
-    missingFor: (missing: number, reward: string): string => `Le faltan ${missing} pts para ${reward}`,
+    missingFor: (missing: number, reward: string): string =>
+      `Le faltan ${missing} pts para ${reward}`,
     scanAnother: 'Escanear otro cliente',
     staffErrors: {
       qr_expired: 'Ese QR ya caducó. Pídele que lo vuelva a abrir.',
@@ -180,14 +185,17 @@ export const adminStrings = {
     enabledHint: 'Muestra la pestaña Puntos en la app y permite sumar y canjear.',
     perVisit: 'Puntos por visita',
     cooldown: 'Horas entre visitas del mismo cliente',
-    cooldownHint: '20 = una visita al día. 0 = sin límite (no recomendado: un QR fotografiado se podría usar sin venir).',
+    cooldownHint:
+      '20 = una visita al día. 0 = sin límite (no recomendado: un QR fotografiado se podría usar sin venir).',
     invalidNumber: 'Escribe un número válido',
 
     qrTitle: 'QR del local',
     modeStatic: 'Fijo (impreso)',
-    modeStaticHint: 'Lo imprimes y lo pegas en el mostrador. Si alguien comparte la foto, genera uno nuevo.',
+    modeStaticHint:
+      'Lo imprimes y lo pegas en el mostrador. Si alguien comparte la foto, genera uno nuevo.',
     modeRotating: 'En pantalla (cambia cada minuto)',
-    modeRotatingHint: 'Para una tablet o pantalla en el mostrador. Una foto del QR deja de servir al minuto.',
+    modeRotatingHint:
+      'Para una tablet o pantalla en el mostrador. Una foto del QR deja de servir al minuto.',
     print: 'Imprimir QR',
     regenerate: 'Generar código nuevo',
     regenerateConfirm: 'El QR impreso actual dejará de funcionar. ¿Generar uno nuevo?',
@@ -212,7 +220,8 @@ export const adminStrings = {
 
   stories: {
     newTitle: 'Nueva historia',
-    newHint: 'Una foto o un video corto (vertical se ve mejor). Aparece arriba en la pantalla de inicio de la app.',
+    newHint:
+      'Una foto o un video corto (vertical se ve mejor). Aparece arriba en la pantalla de inicio de la app.',
     choose: 'Elegir foto o video',
     change: 'Cambiar',
     uploading: 'Subiendo…',
@@ -221,7 +230,12 @@ export const adminStrings = {
     product: 'Producto para pedir (opcional)',
     noProduct: 'Ninguno',
     duration: 'Duración',
-    durations: { '24h': '24 horas', '3d': '3 días', '7d': '7 días', featured: 'Destacada (no caduca)' },
+    durations: {
+      '24h': '24 horas',
+      '3d': '3 días',
+      '7d': '7 días',
+      featured: 'Destacada (no caduca)',
+    },
     publish: 'Publicar historia',
     published: 'Historia publicada',
     listTitle: 'Tus historias',
@@ -237,6 +251,48 @@ export const adminStrings = {
     remove: 'Eliminar',
     removeConfirm: '¿Eliminar esta historia?',
     video: 'Video',
+  },
+
+  ingredients: {
+    title: 'Ingredientes',
+    hint: '¿Se acabó algo? Apágalo aquí y te digo qué productos y opciones lo usan para apagarlos también.',
+    offNow: (names: string): string => `Agotados ahora: ${names}`,
+    uses: (products: number, options: number): string =>
+      products === 0 && options === 0
+        ? 'Sin productos ligados'
+        : [
+            products > 0 ? `${products} producto${products === 1 ? '' : 's'}` : '',
+            options > 0 ? `${options} opción${options === 1 ? '' : 'es'}` : '',
+          ]
+            .filter((x) => x !== '')
+            .join(' · '),
+    askOff: (name: string): string => `${name} se usa en esto. ¿Lo marco también como agotado?`,
+    askOn: (name: string): string => `Volvió ${name}. ¿Reactivo también estos?`,
+    option: (name: string, group: string): string => `Opción "${name}" de ${group}`,
+    stillMissing: (names: string): string => `Aún le falta: ${names}`,
+    confirmOff: (n: number): string =>
+      n === 0
+        ? 'Solo apagar el ingrediente'
+        : `Apagar ingrediente y ${n} marcado${n === 1 ? '' : 's'}`,
+    confirmOn: (n: number): string =>
+      n === 0
+        ? 'Solo prender el ingrediente'
+        : `Prender ingrediente y ${n} marcado${n === 1 ? '' : 's'}`,
+    offDone: (name: string, n: number): string =>
+      n === 0
+        ? `${name} quedó agotado.`
+        : `${name} quedó agotado, junto con ${n} producto${n === 1 ? '' : 's'}/opción${n === 1 ? '' : 'es'}.`,
+    onDone: (name: string, n: number): string =>
+      n === 0
+        ? `${name} está disponible otra vez.`
+        : `${name} está disponible otra vez y se reactivaron ${n}.`,
+    available: 'disponible',
+    soldOut: 'agotado',
+    newPlaceholder: 'Nuevo ingrediente (ej. Guayaba)',
+    exists: 'Ese ingrediente ya existe.',
+    productTitle: 'Ingredientes del producto',
+    productHint:
+      'Marca lo que lleva. Si un ingrediente se agota, el panel te propondrá apagar este producto.',
   },
 
   map: {
@@ -276,7 +332,9 @@ export const adminStrings = {
     heroSentence: (orders: number, customers: number): string =>
       `en ${orders === 1 ? '1 pedido' : `${orders} pedidos`} de ${customers === 1 ? '1 cliente' : `${customers} clientes`}.`,
     vsBefore: (pct: number): string =>
-      pct === 0 ? 'Igual que el periodo anterior.' : `${pct > 0 ? '▲' : '▼'} ${Math.abs(pct)} % contra el periodo anterior.`,
+      pct === 0
+        ? 'Igual que el periodo anterior.'
+        : `${pct > 0 ? '▲' : '▼'} ${Math.abs(pct)} % contra el periodo anterior.`,
     noPrevious: 'sin comparar',
     rewardsGiven: 'Recompensas entregadas',
     ordersCount: (n: number): string => (n === 1 ? '1 pedido' : `${n} pedidos`),
@@ -288,7 +346,8 @@ export const adminStrings = {
     bestWeekday: (day: string): string => `Tu mejor día de la semana: ${day}`,
     weekdays: ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'],
     byPay: '¿Cómo pagan tus clientes?',
-    payTakeaway: (method: string, pct: number): string => `${pct} % paga con ${method.toLowerCase()}`,
+    payTakeaway: (method: string, pct: number): string =>
+      `${pct} % paga con ${method.toLowerCase()}`,
     customersTitle: 'Tus clientes',
     returningTakeaway: (pct: number): string => `${pct} % ya te había comprado antes`,
     allNew: 'Todos tus clientes de este periodo son nuevos',
@@ -304,7 +363,8 @@ export const adminStrings = {
     owner: 'Dueño',
     staff: 'Cajero',
     createTitle: 'Crear cuenta nueva',
-    createHint: 'Para un empleado nuevo o la tablet de la tienda: tú le creas la cuenta y le das el correo y la contraseña.',
+    createHint:
+      'Para un empleado nuevo o la tablet de la tienda: tú le creas la cuenta y le das el correo y la contraseña.',
     existingTitle: 'Ya tiene cuenta',
     nameLabel: 'Nombre',
     namePlaceholder: 'Ej. Pepe (cajero)',
@@ -320,15 +380,18 @@ export const adminStrings = {
       correo_invalido: 'Revisa el correo.',
       nombre_invalido: 'Escribe el nombre.',
       solo_dueno: 'Solo un dueño puede crear cuentas.',
-      'Failed to send a request': 'No se pudo crear: falta publicar la función equipo-crear en Supabase.',
+      'Failed to send a request':
+        'No se pudo crear: falta publicar la función equipo-crear en Supabase.',
     } as Record<string, string>,
     addTitle: 'Dar acceso',
-    addHint: 'La persona primero se registra en la app con su correo (Perfil → No tengo cuenta). Después escribe aquí ese correo.',
+    addHint:
+      'La persona primero se registra en la app con su correo (Perfil → No tengo cuenta). Después escribe aquí ese correo.',
     email: 'Correo de la persona',
     add: 'Dar acceso',
     added: 'Listo, ya tiene acceso. Que cierre sesión y vuelva a entrar.',
     remove: 'Quitar acceso',
-    removeConfirm: (who: string): string => `¿Quitarle el acceso a ${who}? Su cuenta de cliente sigue existiendo.`,
+    removeConfirm: (who: string): string =>
+      `¿Quitarle el acceso a ${who}? Su cuenta de cliente sigue existiendo.`,
     makeOwner: 'Hacer dueño',
     makeStaff: 'Hacer cajero',
     errors: {
@@ -343,7 +406,8 @@ export const adminStrings = {
     counter: 'En mostrador',
     counterHint: 'El cliente elige al pedir cómo va a pagar y tú cobras al entregar.',
     online: 'Cobro automático (próximamente)',
-    onlineHint: 'Cobran solos dentro de la app. Se activan cuando conectemos la cuenta del proveedor.',
+    onlineHint:
+      'Cobran solos dentro de la app. Se activan cuando conectemos la cuenta del proveedor.',
     transferTitle: 'Transferencia',
     transferToggle: 'Aceptar transferencias',
     bank: 'Banco',
@@ -357,9 +421,12 @@ export const adminStrings = {
     mpTitle: 'Mercado Pago',
     mpToggle: 'Aceptar Mercado Pago',
     mpAutoTitle: 'Cobro automático',
-    mpAutoOn: (account: string): string => `Conectado${account === '' ? '' : ` (${account})`}: cada cliente paga el total exacto de su pedido y se marca pagado solo.`,
-    mpAutoTest: 'Conectado en modo PRUEBA: los pagos son ficticios. Cambia al Access Token de producción para cobrar de verdad.',
-    mpAutoOff: 'Sin conectar. Guarda tu Access Token de Mercado Pago en Supabase (Edge Functions → Secrets → MP_ACCESS_TOKEN) y toca "Probar conexión".',
+    mpAutoOn: (account: string): string =>
+      `Conectado${account === '' ? '' : ` (${account})`}: cada cliente paga el total exacto de su pedido y se marca pagado solo.`,
+    mpAutoTest:
+      'Conectado en modo PRUEBA: los pagos son ficticios. Cambia al Access Token de producción para cobrar de verdad.',
+    mpAutoOff:
+      'Sin conectar. Guarda tu Access Token de Mercado Pago en Supabase (Edge Functions → Secrets → MP_ACCESS_TOKEN) y toca "Probar conexión".',
     mpCheck: 'Probar conexión',
     mpChecking: 'Probando…',
     mpReasons: {
@@ -367,17 +434,21 @@ export const adminStrings = {
       token_rechazado: 'Mercado Pago rechazó el token. Revisa que lo copiaste completo.',
       mercadopago_inalcanzable: 'No se pudo hablar con Mercado Pago. Intenta en un momento.',
     } as Record<string, string>,
-    mpCheckFailed: 'No se pudo probar. ¿Ya están publicadas las funciones de Mercado Pago en Supabase?',
+    mpCheckFailed:
+      'No se pudo probar. ¿Ya están publicadas las funciones de Mercado Pago en Supabase?',
     mpLink: 'Liga fija (opcional)',
     mpLinkPlaceholder: 'https://mpago.mx/…',
     mpHelp:
       'Solo si no conectas el cobro automático. Ojo: una liga de Mercado Pago lleva un monto fijo, ' +
       'así que solo sirve si cobras siempre lo mismo.',
-    mpNoAccount: '¿Aún no tienes cuenta? Créala gratis en mercadopago.com.mx; mientras, deja esto apagado.',
+    mpNoAccount:
+      '¿Aún no tienes cuenta? Créala gratis en mercadopago.com.mx; mientras, deja esto apagado.',
     problems: {
       clabe_invalid: 'La CLABE no es válida. Revisa los 18 dígitos.',
-      transfer_without_data: 'Para aceptar transferencias escribe la CLABE (o una nota con los datos).',
-      mp_link_invalid: 'Esa liga no es de Mercado Pago. Debe empezar con https://mpago.mx/, https://mpago.la/ o https://link.mercadopago.com.mx/',
+      transfer_without_data:
+        'Para aceptar transferencias escribe la CLABE (o una nota con los datos).',
+      mp_link_invalid:
+        'Esa liga no es de Mercado Pago. Debe empezar con https://mpago.mx/, https://mpago.la/ o https://link.mercadopago.com.mx/',
       mp_without_link: 'Para aceptar Mercado Pago pega tu liga de cobro.',
       none_on: 'Prende al menos una forma de pago o los clientes no podrán pedir.',
     } as Record<string, string>,

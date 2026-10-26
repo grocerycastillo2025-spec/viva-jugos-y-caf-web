@@ -178,6 +178,15 @@ pin fijo al centro como en Uber, **Buscar mi dirección** (Nominatim) y
 **Usar mi ubicación**. Guarda `latitude`/`longitude`; "Cómo llegar" usa ese
 punto.
 
+## Ingredientes (0031)
+
+Panel → Menú → **Ingredientes**: al apagar uno (p. ej. Naranja) el panel
+muestra los productos y opciones que lo usan, marcados, y los apaga junto
+con el ingrediente (`set_ingredient_available`). Al prenderlo propone
+reactivar los que ya tienen todos sus ingredientes. Cada producto tiene sus
+ingredientes en su ficha. `supabase/seed/viva_ingredientes.sql` los crea y
+liga solos a partir de las descripciones del menú.
+
 ## Lo que todavía no está
 
 - **Cobro en línea** (Mercado Pago, Stripe o Clip). Los interruptores ya
