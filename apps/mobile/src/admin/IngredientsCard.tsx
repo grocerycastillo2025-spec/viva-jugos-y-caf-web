@@ -156,11 +156,22 @@ export function IngredientsCard({
 
       {pending !== null ? (
         <View style={[styles.ask, pending.turningOn ? styles.askOn : styles.askOff]}>
-          <Text style={styles.askTitle}>
-            {pending.turningOn
-              ? t.askOn(pending.ingredient.name)
-              : t.askOff(pending.ingredient.name)}
-          </Text>
+          <View style={styles.askHead}>
+            <Text style={[styles.askTitle, styles.grow]}>
+              {pending.turningOn
+                ? t.askOn(pending.ingredient.name)
+                : t.askOff(pending.ingredient.name)}
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={adminStrings.cancel}
+              onPress={() => setPending(null)}
+              hitSlop={10}
+              style={styles.close}
+            >
+              <Ionicons name="close" size={22} color={colors.text} />
+            </Pressable>
+          </View>
           {relevant(pending.impact.items, pending.turningOn).map((item) => {
             const checked = pending.items.includes(item.id);
             const blocked = pending.turningOn && item.other_missing.length > 0;
@@ -315,11 +326,19 @@ function createStyles(colors: BrandColors) {
     ask: { gap: spacing.sm, padding: spacing.md, borderRadius: radius.md, borderWidth: 2 },
     askOff: { borderColor: colors.danger, backgroundColor: '#FFF6F4' },
     askOn: { borderColor: colors.success, backgroundColor: '#EEF7F1' },
+    askHead: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
+    close: { padding: 2, borderRadius: 999 },
     askTitle: { color: colors.text, fontWeight: '800', fontSize: typography.body.fontSize },
     checkRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 4 },
     checkText: { color: colors.text, fontSize: typography.label.fontSize + 1, fontWeight: '600' },
     warn: { color: colors.textMuted, fontSize: typography.caption.fontSize },
-    askButtons: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap', marginTop: spacing.xs },
+    askButtons: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+      flexWrap: 'wrap',
+      marginTop: spacing.xs,
+      alignItems: 'center',
+    },
     addRow: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center' },
   });
 }
