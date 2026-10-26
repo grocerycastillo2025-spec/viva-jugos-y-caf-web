@@ -533,3 +533,31 @@ export async function removeTeamMember(restaurantId: string, userId: string): Pr
   });
   fail(error);
 }
+
+// ---------------------------------------------------------------------
+// CREAR CUENTA DEL EQUIPO (Edge Function equipo-crear)
+// ---------------------------------------------------------------------
+
+export interface NewTeamAccount {
+  readonly name: string;
+  readonly email: string;
+  readonly password: string;
+  readonly role: MemberRole;
+}
+
+/** El dueño crea la cuenta con contraseña temporal; queda con el rol puesto. */
+export async function createTeamAccount(restaurantId: string, account: NewTeamAccount): Promise<void> {
+  const { error } = await getSupabase().functions.invoke('equipo-crear', {
+    body: { restaurant_id: restaurantId, ...account },
+  });
+  if (error === null) return;
+  let reason = error.message;
+  try {
+    const ctx = (error as { context?: { json?: () => Promise<unknown> } }).context;
+    const payload = (await ctx?.json?.()) as { error?: unknown } | undefined;
+    if (typeof payload?.error === 'string') reason = payload.error;
+  } catch {
+    // mensaje genérico
+  }
+  throw dataError(reason);
+}

@@ -107,6 +107,11 @@ teléfono, como una pantalla más).
   - Equipo (`0025_equipo.sql`): el dueño da acceso de **Dueño** o **Cajero**
     a una cuenta ya registrada (por correo) y lo quita. Nadie se quita a sí
     mismo y siempre queda al menos un dueño. Ya no hace falta SQL para esto.
+    **Crear cuenta nueva** (función `equipo-crear`): el dueño escribe nombre,
+    correo y una contraseña temporal (botón Generar) y la cuenta queda creada
+    y confirmada con su rol, sin que la persona se registre antes. Usa la
+    llave de servicio solo en el servidor; si el correo ya existe, pide usar
+    "Ya tiene cuenta".
 
 Menú base: `supabase/seed/viva_menu_base.sql` carga las 4 categorías y 12
 productos del menú impreso, con Tamaño (500 ml / 1 litro), Leche y "Crea el

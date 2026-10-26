@@ -17,6 +17,7 @@ import {
   fetchConnectedProviders,
   updatePaymentOptions,
   addTeamMember,
+  createTeamAccount,
   fetchTeam,
   removeTeamMember,
   type MemberRole,
@@ -51,6 +52,7 @@ import {
   paymentSetupProblems,
 } from '../../src/domain/payment-options';
 import { checkMercadoPago } from '../../src/api/mercadopago';
+import { tempPassword } from '../../src/domain/temp-password';
 import { useAsync } from '../../src/hooks/use-async';
 import { strings } from '../../src/strings';
 import { useBranding, useColors } from '../../src/state/branding-context';
@@ -518,6 +520,8 @@ function createStyles(colors: BrandColors) {
     roleChipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
     roleChipText: { color: colors.text, fontWeight: '700', fontSize: typography.label.fontSize },
     roleChipTextOn: { color: colors.onPrimary },
+    passwordRow: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm },
+    generate: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 14 },
     mpCheck: { alignSelf: 'flex-start', minHeight: 40 },
     paySection: {
       gap: spacing.sm,
@@ -751,12 +755,17 @@ function TeamCard(): ReactNode {
   const { data, refresh } = useAsync(load, [restaurantId]);
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<MemberRole>('staff');
+  const [mode, setMode] = useState<'create' | 'existing'>('create');
+  const [newName, setNewName] = useState('');
+  const [newPassword, setNewPassword] = useState(() => tempPassword());
   const [confirming, setConfirming] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
 
   const explain = (cause: unknown): string => {
     const message = cause instanceof Error ? cause.message : String(cause);
+    const createKey = Object.keys(tm.createErrors).find((k) => message.includes(k));
+    if (createKey !== undefined) return tm.createErrors[createKey] ?? message;
     const key = Object.keys(tm.errors).find((k) => message.includes(k));
     return key === undefined
       ? `${adminStrings.saveFailed}: ${message}`
@@ -859,30 +868,109 @@ function TeamCard(): ReactNode {
       })}
 
       <View style={styles.addBox}>
-        <Text style={styles.label}>{tm.addTitle}</Text>
-        <Text style={styles.hint}>{tm.addHint}</Text>
-        <Field
-          label={tm.email}
-          value={email}
-          onChangeText={setEmail}
-          keyboardType="email-address"
-          autoCapitalize="none"
-        />
         <View style={styles.roleRow}>
-          {roleChip('staff', tm.staff)}
-          {roleChip('owner', tm.owner)}
+          {(['create', 'existing'] as const).map((m) => (
+            <Pressable
+              key={m}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: mode === m }}
+              onPress={() => setMode(m)}
+              style={[styles.roleChip, mode === m && styles.roleChipOn]}
+            >
+              <Text style={[styles.roleChipText, mode === m && styles.roleChipTextOn]}>
+                {m === 'create' ? tm.createTitle : tm.existingTitle}
+              </Text>
+            </Pressable>
+          ))}
         </View>
-        <Button
-          label={tm.add}
-          busy={busy}
-          disabled={!email.includes('@')}
-          onPress={() =>
-            void run(async () => {
-              await addTeamMember(restaurantId, email, role);
-              setEmail('');
-            }, tm.added)
-          }
-        />
+        {mode === 'create' ? (
+          <>
+            <Text style={styles.hint}>{tm.createHint}</Text>
+            <Field
+              label={tm.nameLabel}
+              value={newName}
+              onChangeText={setNewName}
+              placeholder={tm.namePlaceholder}
+            />
+            <Field
+              label={tm.email}
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+            <View style={styles.passwordRow}>
+              <View style={styles.grow}>
+                <Field
+                  label={tm.passwordLabel}
+                  value={newPassword}
+                  onChangeText={setNewPassword}
+                  autoCapitalize="none"
+                />
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setNewPassword(tempPassword())}
+                style={styles.generate}
+              >
+                <Ionicons name="refresh" size={16} color={colors.primary} />
+                <Text style={styles.linkText}>{tm.generate}</Text>
+              </Pressable>
+            </View>
+            <View style={styles.roleRow}>
+              {roleChip('staff', tm.staff)}
+              {roleChip('owner', tm.owner)}
+            </View>
+            <Button
+              label={tm.create}
+              busy={busy}
+              disabled={!email.includes('@') || newName.trim() === '' || newPassword.length < 8}
+              onPress={() => {
+                const created = { email: email.trim().toLowerCase(), password: newPassword };
+                void run(
+                  async () => {
+                    await createTeamAccount(restaurantId, {
+                      name: newName.trim(),
+                      email: created.email,
+                      password: created.password,
+                      role,
+                    });
+                    setEmail('');
+                    setNewName('');
+                    setNewPassword(tempPassword());
+                  },
+                  tm.created(created.email, created.password),
+                );
+              }}
+            />
+          </>
+        ) : (
+          <>
+            <Text style={styles.hint}>{tm.addHint}</Text>
+            <Field
+              label={tm.email}
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+            <View style={styles.roleRow}>
+              {roleChip('staff', tm.staff)}
+              {roleChip('owner', tm.owner)}
+            </View>
+            <Button
+              label={tm.add}
+              busy={busy}
+              disabled={!email.includes('@')}
+              onPress={() =>
+                void run(async () => {
+                  await addTeamMember(restaurantId, email, role);
+                  setEmail('');
+                }, tm.added)
+              }
+            />
+          </>
+        )}
       </View>
       {notice !== null ? <Notice tone={notice.tone} text={notice.text} /> : null}
     </Card>

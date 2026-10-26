@@ -1,8 +1,9 @@
-name: Funciones de Mercado Pago (Supabase)
+name: Funciones de Mercado Pago y equipo (Supabase)
 
 # Publica en Supabase las Edge Functions del cobro con Mercado Pago:
 #   mp-pago     crea la liga de pago con el monto exacto de cada pedido
 #   mp-webhook  recibe el aviso de Mercado Pago y marca el pedido pagado
+#   equipo-crear el dueño crea cuentas de cajero/dueño desde el panel
 #
 # Se lanza a mano (Actions -> "Funciones de Mercado Pago" -> Run workflow)
 # y cada vez que cambian esas funciones en main.
@@ -22,6 +23,7 @@ on:
       - 'supabase/functions/mp-webhook/**'
       - 'supabase/functions/_shared/mercadopago.ts'
       - 'supabase/functions/checkout/auth.ts'
+      - 'supabase/functions/equipo-crear/**'
 
 concurrency:
   group: supabase-functions
@@ -65,3 +67,4 @@ jobs:
         run: |
           pnpm supabase functions deploy mp-pago --project-ref "$PROJECT_REF" --no-verify-jwt
           pnpm supabase functions deploy mp-webhook --project-ref "$PROJECT_REF" --no-verify-jwt
+          pnpm supabase functions deploy equipo-crear --project-ref "$PROJECT_REF" --no-verify-jwt

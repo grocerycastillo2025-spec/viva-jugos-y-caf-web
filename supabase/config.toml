@@ -75,3 +75,8 @@ verify_jwt = false
 
 [functions.mp-webhook]
 verify_jwt = false
+
+# El dueño crea cuentas del equipo (0031). Identifica al usuario con su
+# token, como `checkout`, y usa la llave de servicio solo en el servidor.
+[functions.equipo-crear]
+verify_jwt = false
