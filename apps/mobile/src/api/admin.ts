@@ -349,7 +349,7 @@ export async function deleteProduct(productId: string): Promise<void> {
  * escribir en las propias.
  */
 export async function uploadImage(
-  bucket: 'menu-images' | 'branding' | 'stories',
+  bucket: 'menu-images' | 'branding' | 'stories' | 'sounds',
   folder: string,
   blob: Blob,
   extension: string,
@@ -560,4 +560,27 @@ export async function createTeamAccount(restaurantId: string, account: NewTeamAc
     // mensaje genérico
   }
   throw dataError(reason);
+}
+
+// ---------------------------------------------------------------------
+// ALARMA DE PEDIDOS (0032)
+// ---------------------------------------------------------------------
+
+/** Sonido propio de la alarma; null si no hay o la base aún no tiene la 0032. */
+export async function fetchAlertSound(storeId: string): Promise<string | null> {
+  const { data, error } = await getSupabase()
+    .from('stores')
+    .select('alert_sound_url')
+    .eq('id', storeId)
+    .maybeSingle<{ alert_sound_url: string | null }>();
+  if (error !== null) return null;
+  return data?.alert_sound_url ?? null;
+}
+
+export async function setAlertSound(storeId: string, url: string | null): Promise<void> {
+  const { error } = await getSupabase().from('stores').update({ alert_sound_url: url }).eq('id', storeId);
+  if (error?.code === 'PGRST204' || error?.code === '42703') {
+    throw dataError('Falta correr la actualización de la alarma en Supabase (actualizacion-viva-alarma.sql).', error.code);
+  }
+  fail(error);
 }

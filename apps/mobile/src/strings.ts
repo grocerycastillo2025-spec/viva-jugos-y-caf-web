@@ -435,6 +435,21 @@ export const strings = {
     none: 'Por ahora no hay formas de pago activas. Pregunta en el mostrador.',
   },
 
+  orderUpdates: {
+    title: {
+      preparing: (n: number): string => `Ya estamos preparando tu pedido #${n}`,
+      ready: (n: number): string => `¡Tu pedido #${n} está listo!`,
+      canceled: (n: number): string => `Tu pedido #${n} fue cancelado`,
+      completed: (n: number): string => `Pedido #${n} entregado`,
+    },
+    body: {
+      preparing: 'Te avisamos cuando esté listo.',
+      ready: 'Pasa a recogerlo al mostrador con tu código. Toca para verlo.',
+      canceled: 'Toca para ver el motivo.',
+      completed: '¡Gracias!',
+    },
+  },
+
   stories: {
     title: 'Historias',
     open: (caption: string): string => `Ver historia ${caption}`,

@@ -116,3 +116,19 @@ export async function pickStoryMedia(): Promise<PickedStoryMedia | null> {
   }
   return { blob: file, extension, previewUrl: URL.createObjectURL(file), mediaType: 'video' };
 }
+
+export interface PickedAudio {
+  readonly blob: Blob;
+  readonly extension: string;
+  readonly name: string;
+}
+
+/** Sonido para la alarma: mp3/wav/m4a/ogg, hasta 2 MB (lo que admite el bucket). */
+export async function pickAlarmSound(): Promise<PickedAudio | null> {
+  if (!canPickImages) return null;
+  const file = await chooseFile('audio/*,.mp3,.wav,.m4a,.ogg');
+  if (file === null) return null;
+  if (file.size > 2 * 1024 * 1024) throw new Error('too_big');
+  const ext = (file.name.split('.').pop() ?? 'mp3').toLowerCase().replace(/[^a-z0-9]/g, '') || 'mp3';
+  return { blob: file, extension: ext, name: file.name };
+}

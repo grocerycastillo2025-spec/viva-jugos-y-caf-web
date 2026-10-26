@@ -14,7 +14,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
-  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -39,7 +38,9 @@ import {
 } from '../../src/domain/admin';
 import type { BrandColors } from '../../src/domain/branding';
 import { formatMoney } from '../../src/domain/money';
+import { pendingNewOrders } from '../../src/domain/alarm';
 import { needsPaymentConfirmation } from '../../src/domain/payment-options';
+import { AlarmBanner, AlarmSettingsCard, useOrderAlarm } from '../../src/admin/OrderAlarm';
 import type { OrderStatus } from '../../src/domain/order';
 import { dayKey, formatSlotLabel, partsInZone } from '../../src/domain/pickup';
 import { useAsync } from '../../src/hooks/use-async';
@@ -50,39 +51,13 @@ import { radius, spacing, type as typography } from '../../src/theme';
 
 const LIVE_COLUMNS: readonly OrderColumn[] = ['new', 'preparing', 'ready'];
 
-/** Un "ding" corto con WebAudio. Sin archivos de audio que versionar. */
-function chime(): void {
-  if (Platform.OS !== 'web' || typeof window === 'undefined') return;
-  try {
-    const AudioCtx =
-      window.AudioContext ??
-      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (AudioCtx === undefined) return;
-    const ctx = new AudioCtx();
-    [880, 1320].forEach((freq, i) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.frequency.value = freq;
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      const start = ctx.currentTime + i * 0.18;
-      gain.gain.setValueAtTime(0.0001, start);
-      gain.gain.exponentialRampToValueAtTime(0.3, start + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.35);
-      osc.start(start);
-      osc.stop(start + 0.4);
-    });
-  } catch {
-    // Sin audio no pasa nada: el pedido igual aparece en pantalla.
-  }
-}
-
 export default function AdminOrdersScreen(): ReactNode {
   const colors = useColors();
   const admin = useAdminStyles(colors);
   const router = useRouter();
-  const { store } = useAdmin();
+  const { store, restaurantId, isOwner } = useAdmin();
   const { width } = useWindowDimensions();
+  const [showAlarm, setShowAlarm] = useState(false);
   const sideBySide = width >= 900;
 
   const [banner, setBanner] = useState<string | null>(null);
@@ -97,18 +72,22 @@ export default function AdminOrdersScreen(): ReactNode {
   }, [store.id, store.timezone]);
 
   const { data, error, loading, refresh, reload } = useAsync(load, [store.id]);
-  useInterval(refresh, 15_000);
+  useInterval(refresh, 10_000);
 
   // Aviso de pedidos nuevos (no en la primera carga).
   useEffect(() => {
     if (data === null) return;
     const arrived = newArrivals(seen.current, data);
     seen.current = new Set(data.map((order) => order.id));
-    if (arrived.length > 0) {
-      setBanner(t.orders.newArrived(arrived.length));
-      chime();
-    }
+    if (arrived.length > 0) setBanner(t.orders.newArrived(arrived.length));
   }, [data]);
+
+  // Alarma: suena mientras haya pedidos Nuevos sin empezar.
+  const pendingNumbers = useMemo(
+    () => pendingNewOrders(data ?? []).map((order) => order.order_number),
+    [data],
+  );
+  const alarm = useOrderAlarm(store.id, pendingNumbers);
 
   const move = useCallback(
     async (order: OrderWithItems, to: OrderStatus, reason: string | null = null) => {
@@ -177,7 +156,16 @@ export default function AdminOrdersScreen(): ReactNode {
         </Pressable>
       }
     >
-      {banner !== null ? (
+      <AlarmBanner alarm={alarm} pending={pendingNumbers} />
+      {showAlarm ? (
+        <AlarmSettingsCard
+          alarm={alarm}
+          storeId={store.id}
+          restaurantId={restaurantId}
+          isOwner={isOwner}
+        />
+      ) : null}
+      {banner !== null && pendingNumbers.length === 0 ? (
         <Pressable onPress={() => setBanner(null)} style={admin.banner}>
           <Ionicons name="notifications" size={20} color={colors.onAccent} />
           <Text style={admin.bannerText}>{banner}</Text>
@@ -186,6 +174,18 @@ export default function AdminOrdersScreen(): ReactNode {
       {failure !== null ? <Notice tone="error" text={failure} /> : null}
 
       <View style={admin.toolbar}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => setShowAlarm((v) => !v)}
+          style={admin.alarmToggle}
+        >
+          <Ionicons
+            name={alarm.settings.enabled ? 'notifications' : 'notifications-off'}
+            size={16}
+            color={colors.primary}
+          />
+          <Text style={admin.alarmToggleText}>{t.alarm.settings}</Text>
+        </Pressable>
         <Text style={admin.updated}>{t.orders.lastUpdate(clock)}</Text>
         <Pressable accessibilityRole="button" onPress={refresh} style={admin.refresh} hitSlop={8}>
           <Ionicons name="refresh" size={18} color={colors.primary} />
@@ -445,6 +445,22 @@ function useAdminStyles(colors: BrandColors) {
 
 function createStyles(colors: BrandColors) {
   return StyleSheet.create({
+    alarmToggle: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      marginRight: 'auto',
+      paddingHorizontal: spacing.md,
+      paddingVertical: 6,
+      borderRadius: radius.pill,
+      borderWidth: 1,
+      borderColor: colors.primary,
+    },
+    alarmToggleText: {
+      color: colors.primary,
+      fontWeight: '800',
+      fontSize: typography.label.fontSize,
+    },
     scanButton: {
       flexDirection: 'row',
       alignItems: 'center',

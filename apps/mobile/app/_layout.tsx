@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import type { ReactNode } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { OrderUpdates } from '../src/components/OrderUpdates';
 import { configureMoney } from '../src/domain/money';
 import { readLocaleConfig } from '../src/env';
 import { BrandingProvider, useColors } from '../src/state/branding-context';
@@ -59,6 +60,8 @@ export default function RootLayout(): ReactNode {
                   usuario, y al cerrar sesion se da de baja. */}
               <PushProvider>
                 <RootStack />
+                {/* Avisos de "tu pedido está listo" en cualquier pantalla. */}
+                <OrderUpdates />
               </PushProvider>
             </CartProvider>
           </StoreProvider>
