@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { BrandColors } from '../domain/branding';
 import { useBranding, useColors } from '../state/branding-context';
+import { useSession } from '../state/session-context';
 import { radius, spacing, type as typography } from '../theme';
 import { useAdmin } from './admin-context';
 import { adminStrings as t } from './strings';
@@ -51,6 +52,14 @@ export function AdminShell({
   const pathname = usePathname();
   const { displayName } = useBranding();
   const { isOwner, store } = useAdmin();
+  const { user, signOut } = useSession();
+
+  // La sesión del panel ES la de la app: cerrarla aquí la cierra en todo.
+  const logout = (): void => {
+    void signOut()
+      .catch(() => undefined)
+      .finally(() => router.replace('/profile'));
+  };
 
   const active = (href: string): boolean =>
     href === '/admin' ? pathname === '/admin' || pathname === '/admin/' : pathname.startsWith(href);
@@ -66,6 +75,11 @@ export function AdminShell({
             <Text style={styles.brand} numberOfLines={1}>
               {store.name === displayName ? displayName : `${displayName} · ${store.name}`}
             </Text>
+            {user !== null ? (
+              <Text style={styles.who} numberOfLines={1}>
+                {user.email} · {isOwner ? t.roleOwner : t.roleStaff}
+              </Text>
+            ) : null}
           </View>
           <Pressable
             accessibilityRole="link"
@@ -74,6 +88,15 @@ export function AdminShell({
           >
             <Ionicons name="phone-portrait-outline" size={16} color={colors.onPrimary} />
             <Text style={styles.backLinkText}>{t.backToApp}</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t.signOut}
+            onPress={logout}
+            style={({ pressed }) => [styles.backLink, pressed && styles.pressed]}
+          >
+            <Ionicons name="log-out-outline" size={16} color={colors.onPrimary} />
+            <Text style={styles.backLinkText}>{t.signOut}</Text>
           </Pressable>
         </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs}>
@@ -275,6 +298,7 @@ export function createAdminStyles(colors: BrandColors) {
     },
     headerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
     headerText: { flex: 1, minWidth: 0 },
+    who: { color: colors.onPrimary, opacity: 0.85, fontSize: typography.caption.fontSize, marginTop: 2 },
     kicker: {
       color: colors.onPrimary,
       opacity: 0.8,

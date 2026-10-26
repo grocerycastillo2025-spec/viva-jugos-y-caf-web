@@ -65,7 +65,7 @@ export function AuthForm({
     } finally {
       setBusy(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [email]);
 
   const submit = useCallback(async () => {
@@ -90,7 +90,7 @@ export function AuthForm({
     } finally {
       setBusy(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [email, firstName, mode, onSignedIn, password, signIn, signUp]);
 
   const google = useCallback(async () => {
