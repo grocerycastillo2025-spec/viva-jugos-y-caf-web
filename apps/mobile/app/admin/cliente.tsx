@@ -134,6 +134,7 @@ export default function ScanCustomerScreen(): ReactNode {
                   </View>
                   <View style={styles.headText}>
                     <Text style={styles.name}>{card.name}</Text>
+                    {card.email !== null ? <Text style={styles.email}>{card.email}</Text> : null}
                     <Text style={styles.hint}>{t.lifetime(card.lifetime_points)}</Text>
                   </View>
                   <View style={styles.pointsPill}>
@@ -256,6 +257,7 @@ function createStyles(colors: BrandColors) {
     },
     headText: { flex: 1, minWidth: 0, gap: 2 },
     name: { color: colors.text, fontSize: typography.section.fontSize + 2, fontWeight: '800' },
+    email: { color: colors.text, fontSize: typography.label.fontSize, fontWeight: '600' },
     pointsPill: { alignItems: 'center' },
     pointsValue: { color: colors.primary, fontSize: 34, fontWeight: '800', lineHeight: 38 },
     pointsLabel: {
