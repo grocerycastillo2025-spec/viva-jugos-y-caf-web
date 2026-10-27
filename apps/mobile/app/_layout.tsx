@@ -39,6 +39,9 @@ function RootStack(): ReactNode {
         <Stack.Screen name="checkout" options={{ presentation: 'card' }} />
         <Stack.Screen name="pay/[id]" options={{ presentation: 'card' }} />
         <Stack.Screen name="order/[id]" options={{ presentation: 'card' }} />
+        <Stack.Screen name="comunidad/nueva" options={{ presentation: 'card' }} />
+        <Stack.Screen name="comunidad/[id]" options={{ presentation: 'card' }} />
+        <Stack.Screen name="comunidad/avisos" options={{ presentation: 'card' }} />
       </Stack>
     </>
   );

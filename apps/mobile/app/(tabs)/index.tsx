@@ -24,12 +24,14 @@ import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { fetchCommunitySummary } from '../../src/api/community';
 import { fetchFeaturedItems, fetchItemsRequiringChoice } from '../../src/api/menu';
 import { fetchStoreHours, formatClock, todayHours } from '../../src/api/store';
 import type { MenuItemRow, StoreHoursRow, StoreRow } from '../../src/api/types';
 import { CartBar } from '../../src/components/CartBar';
 import { InstallBanner } from '../../src/components/InstallBanner';
 import { StoriesRow } from '../../src/components/StoriesRow';
+import { CommunityTeaser, NoticesTeaser } from '../../src/community/Summary';
 import { readEnv } from '../../src/env';
 import { DataState } from '../../src/components/DataState';
 import { MenuItemCard } from '../../src/components/MenuItemCard';
@@ -77,6 +79,13 @@ export default function HomeScreen(): ReactNode {
   // tumban la pantalla; simplemente no sale la fila.
   const getStories = useCallback(() => loadStories(readEnv().restaurantId).catch(() => []), []);
   const { data: stories } = useAsync(getStories, []);
+
+  // Comunidad (0033): igual que las historias, si falla no tumba Inicio.
+  const getCommunity = useCallback(
+    () => fetchCommunitySummary(readEnv().restaurantId).catch(() => null),
+    [],
+  );
+  const { data: community, refresh: refreshCommunity } = useAsync(getCommunity, []);
 
   // Al abrir la app, las historias salen solas (como en Instagram): una
   // vez por visita, empezando por las nuevas. Ver `autoOpenStart`.
@@ -177,7 +186,15 @@ export default function HomeScreen(): ReactNode {
 
   return (
     <>
-      <Screen withTabBar refreshing={refreshing} onRefresh={refresh} contentStyle={styles.content}>
+      <Screen
+        withTabBar
+        refreshing={refreshing}
+        onRefresh={() => {
+          refresh();
+          refreshCommunity();
+        }}
+        contentStyle={styles.content}
+      >
         <InstallBanner />
         <StoriesRow stories={stories ?? []} />
 
@@ -240,6 +257,8 @@ export default function HomeScreen(): ReactNode {
           </View>
         </View>
 
+        <NoticesTeaser summary={community ?? null} />
+
         <View style={styles.section}>
           <SectionTitle>{strings.home.featured}</SectionTitle>
           {featured.length === 0 ? (
@@ -259,6 +278,8 @@ export default function HomeScreen(): ReactNode {
             </View>
           )}
         </View>
+
+        <CommunityTeaser summary={community ?? null} />
       </Screen>
       <CartBar />
     </>

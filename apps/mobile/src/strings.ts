@@ -32,6 +32,8 @@ export const strings = {
     home: 'Inicio',
     menu: 'Menú',
     orders: 'Pedidos',
+    // "Comunidad" no cabe en seis pestañas de un teléfono angosto.
+    community: 'Reseñas',
     rewards: 'Puntos',
     profile: 'Perfil',
   },

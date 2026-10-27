@@ -349,7 +349,7 @@ export async function deleteProduct(productId: string): Promise<void> {
  * escribir en las propias.
  */
 export async function uploadImage(
-  bucket: 'menu-images' | 'branding' | 'stories' | 'sounds',
+  bucket: 'menu-images' | 'branding' | 'stories' | 'sounds' | 'community',
   folder: string,
   blob: Blob,
   extension: string,

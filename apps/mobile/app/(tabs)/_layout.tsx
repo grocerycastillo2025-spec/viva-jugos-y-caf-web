@@ -56,6 +56,13 @@ export default function TabsLayout(): ReactNode {
         options={{ title: strings.tabs.orders, tabBarIcon: tabIcon('receipt-outline', 'receipt') }}
       />
       <Tabs.Screen
+        name="comunidad"
+        options={{
+          title: strings.tabs.community,
+          tabBarIcon: tabIcon('chatbubbles-outline', 'chatbubbles'),
+        }}
+      />
+      <Tabs.Screen
         name="rewards"
         options={{
           title: strings.tabs.rewards,

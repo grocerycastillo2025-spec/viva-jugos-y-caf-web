@@ -81,6 +81,17 @@ export async function pickProductPhoto(): Promise<PickedImage | null> {
   return shrink(file, 1200, false);
 }
 
+/**
+ * Foto de una publicación de la comunidad: cualquier imagen del teléfono
+ * (el iPhone convierte HEIC a JPEG al elegirla), lado mayor 1280 px.
+ */
+export async function pickCommunityPhoto(): Promise<PickedImage | null> {
+  if (!canPickImages) return null;
+  const file = await chooseFile('image/*');
+  if (file === null) return null;
+  return shrink(file, 1280, false);
+}
+
 /** Logo: PNG para conservar la transparencia, lado mayor 800 px. */
 export async function pickLogo(): Promise<PickedImage | null> {
   if (!canPickImages) return null;

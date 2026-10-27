@@ -13,6 +13,7 @@ import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ringOnce, unlockAlarm } from '../admin/alarm-engine';
+import { fetchInbox, type InboxItem } from '../api/community';
 import { fetchMyOrders } from '../api/orders';
 import type { BrandColors } from '../domain/branding';
 import { hasLiveOrders, statusChanges, type StatusChange } from '../domain/order-updates';
@@ -32,6 +33,9 @@ export function OrderUpdates(): ReactNode {
   const previous = useRef<Map<string, string> | null>(null);
   const [toast, setToast] = useState<StatusChange | null>(null);
   const [live, setLive] = useState(false);
+  // Comunidad (0033): "La tienda respondió tu reseña", etc.
+  const seenInbox = useRef<Set<string> | null>(null);
+  const [note, setNote] = useState<InboxItem | null>(null);
 
   // El audio se habilita con el primer toque del cliente en la app.
   useEffect(() => {
@@ -57,11 +61,25 @@ export function OrderUpdates(): ReactNode {
     } catch {
       // sin red: se vuelve a intentar en la siguiente vuelta
     }
+    try {
+      const inbox = await fetchInbox();
+      const fresh = inbox.items.filter((i) => i.read_at === null && seenInbox.current !== null && !seenInbox.current.has(i.id));
+      seenInbox.current = new Set(inbox.items.map((i) => i.id));
+      const first = fresh[0];
+      if (first !== undefined) {
+        setNote(first);
+        ringOnce('timbre', 0.7, null, true);
+      }
+    } catch {
+      // sin la 0033 o sin red: no hay avisos de comunidad
+    }
   }, [user]);
 
   useEffect(() => {
     previous.current = null;
+    seenInbox.current = null;
     setToast(null);
+    setNote(null);
     void check();
   }, [check]);
 
@@ -85,6 +103,39 @@ export function OrderUpdates(): ReactNode {
     return () => clearTimeout(id);
   }, [toast]);
 
+  // Los avisos de la comunidad se van solos a los 8 s.
+  useEffect(() => {
+    if (note === null) return undefined;
+    const id = setTimeout(() => setNote(null), 8_000);
+    return () => clearTimeout(id);
+  }, [note]);
+
+  if (toast === null && note !== null) {
+    const postId = note.data.post_id;
+    return (
+      <View style={[styles.wrap, { top: insets.top + 8 }]} pointerEvents="box-none">
+        <Pressable
+          accessibilityRole="alert"
+          onPress={() => {
+            setNote(null);
+            if (postId !== undefined) router.push({ pathname: '/comunidad/[id]', params: { id: postId } });
+          }}
+          style={[styles.toast, styles.preparing]}
+        >
+          <Text style={styles.emoji}>{note.type === 'community_helpful' ? '👍' : note.type === 'community_reward' ? '🎁' : '💬'}</Text>
+          <View style={styles.grow}>
+            <Text style={styles.title}>{note.title}</Text>
+            <Text style={styles.body} numberOfLines={2}>
+              {note.body}
+            </Text>
+          </View>
+          <Pressable accessibilityRole="button" accessibilityLabel={strings.common.close} onPress={() => setNote(null)} hitSlop={10}>
+            <Ionicons name="close" size={20} color="#FFFFFF" />
+          </Pressable>
+        </Pressable>
+      </View>
+    );
+  }
   if (toast === null) return null;
   const tone =
     toast.kind === 'ready'

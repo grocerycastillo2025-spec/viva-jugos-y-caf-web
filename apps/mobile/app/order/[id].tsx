@@ -22,6 +22,7 @@ import { DataState } from '../../src/components/DataState';
 import { PayInstructions } from '../../src/components/PayInstructions';
 import { Screen } from '../../src/components/Screen';
 import { Button } from '../../src/components/ui';
+import { communityStrings } from '../../src/community/strings';
 import type { BrandColors } from '../../src/domain/branding';
 import { formatMoney, moneyDefaults } from '../../src/domain/money';
 import {
@@ -145,6 +146,20 @@ export default function OrderScreen(): ReactNode {
         </Text>
       </View>
 
+      {order.status === 'completed' ? (
+        <View style={styles.payCard}>
+          <Text style={styles.payTitle}>{communityStrings.rateOrder.title}</Text>
+          <Text style={styles.rateBody}>{communityStrings.rateOrder.body}</Text>
+          <Button
+            label={communityStrings.rateOrder.action}
+            variant="accent"
+            onPress={() =>
+              router.push({ pathname: '/comunidad/nueva', params: { kind: 'review', store: order.store_id } })
+            }
+          />
+        </View>
+      ) : null}
+
       {isPayable(order.status) ? (
         <View style={styles.payCard}>
           <Text style={styles.payTitle}>{strings.order.payPending}</Text>
@@ -262,6 +277,7 @@ function createStyles(colors: BrandColors) {
       gap: spacing.md,
     },
     payTitle: { color: colors.text, fontSize: typography.body.fontSize, fontWeight: '700' },
+    rateBody: { color: colors.textMuted, fontSize: typography.label.fontSize, marginTop: -spacing.sm },
 
     simulated: {
       backgroundColor: colors.surface,

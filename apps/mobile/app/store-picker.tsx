@@ -16,12 +16,17 @@ import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { fetchCommunitySummary } from '../src/api/community';
 import { fetchCatalogSnapshot } from '../src/api/menu';
 import { formatAddress } from '../src/api/store';
 import type { StoreRow } from '../src/api/types';
 import { Screen, useScreenInsets } from '../src/components/Screen';
 import { ErrorState } from '../src/components/DataState';
 import { Button, Loading } from '../src/components/ui';
+import { STAR_COLOR } from '../src/community/Stars';
+import { communityStrings } from '../src/community/strings';
+import { readEnv } from '../src/env';
+import { useAsync } from '../src/hooks/use-async';
 import type { BrandColors } from '../src/domain/branding';
 import {
   groupIssuesByLine,
@@ -69,6 +74,13 @@ export default function StorePickerScreen(): ReactNode {
 
   const { stores, selectedStoreId, selectStore, loading, error, reload } = useStores();
   const { cart, isEmpty, replaceCart } = useCart();
+
+  // Estrellas de cada sucursal (0033). Si falla, simplemente no salen.
+  const getRatings = useCallback(
+    () => fetchCommunitySummary(readEnv().restaurantId).then((s) => s.by_store).catch(() => []),
+    [],
+  );
+  const { data: ratings } = useAsync(getRatings, []);
 
   const [checking, setChecking] = useState<string | null>(null);
   const [checkError, setCheckError] = useState<unknown>(null);
@@ -277,6 +289,17 @@ export default function StorePickerScreen(): ReactNode {
                 <View style={styles.storeBody}>
                   <Text style={styles.storeName}>{store.name}</Text>
                   <Text style={styles.storeAddress}>{formatAddress(store)}</Text>
+                  {(() => {
+                    const r = ratings?.find((x) => x.store_id === store.id);
+                    return r === undefined ? null : (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Ionicons name="star" size={13} color={STAR_COLOR} />
+                        <Text style={styles.storeMeta}>
+                          {Number(r.avg).toFixed(1)} · {communityStrings.reviews(r.count)}
+                        </Text>
+                      </View>
+                    );
+                  })()}
                   <Text style={styles.storeMeta}>
                     {store.status === 'paused' ? strings.storePicker.paused : null}
                     {store.status !== 'paused' && store.pickup_enabled ? strings.home.pickup : null}

@@ -13,6 +13,7 @@ export const adminStrings = {
     stories: 'Historias',
     stats: 'Estadísticas',
     loyalty: 'Lealtad',
+    community: 'Comunidad',
     business: 'Negocio',
   },
   backToApp: 'Ver la app',
